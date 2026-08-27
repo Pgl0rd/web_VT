@@ -61,34 +61,48 @@
             </div>
           </div>
 
-          <!-- Product management -->
-          <div style="margin:18px 0; display:flex; justify-content:space-between; align-items:center; gap:12px;">
-            <h3 style="margin:0;">Quản lý sản phẩm</h3>
+          <div class="admin-section-head">
             <div>
-              <button class="btn btn-primary" onclick="openProductForm()">Thêm sản phẩm mới</button>
-              <button class="btn btn-secondary" onclick="renderAdminProducts()">Làm mới</button>
+              <span class="eyebrow">Kho hàng</span>
+              <h3>Quản lý sản phẩm</h3>
+            </div>
+            <div class="admin-actions">
+              <button class="btn btn-primary" id="openProductFormBtn" type="button">Thêm sản phẩm</button>
+              <button class="btn btn-secondary" id="refreshProductsBtn" type="button">Làm mới</button>
             </div>
           </div>
 
-          <div id="productFormWrap" class="form-card hidden" style="margin-bottom:18px;">
-            <form id="productForm">
-              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
-                <div class="field"><label>Tên sản phẩm</label><input name="name" /></div>
-                <div class="field"><label>Danh mục</label><input name="category" /></div>
-                <div class="field"><label>Thương hiệu</label><input name="brand" /></div>
-                <div class="field"><label>Giá</label><input name="price" type="number" /></div>
-                <div class="field"><label>Giá cũ</label><input name="oldPrice" type="number" /></div>
-                <div class="field"><label>Badge</label><input name="badge" /></div>
-                <div class="field"><label>Chất liệu</label><input name="material" /></div>
-                <div class="field"><label>Kích thước</label><input name="size" /></div>
-                <div class="field"><label>Ảnh (URL)</label><input name="image" /></div>
-                <div class="field" style="grid-column:1/4;"><label>Mô tả</label><textarea name="description" rows="3"></textarea></div>
+          <div id="productFormWrap" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="productFormTitle">
+            <div class="modal-backdrop" data-close-product-form></div>
+            <div class="modal-dialog">
+              <div class="modal-header">
+                <div>
+                  <span class="eyebrow">Thông tin sản phẩm</span>
+                  <h2 id="productFormTitle">Thêm sản phẩm mới</h2>
+                </div>
+                <button class="modal-close" type="button" data-close-product-form aria-label="Đóng">Đóng</button>
               </div>
-              <div style="margin-top:12px; display:flex; gap:8px;">
-                <button class="btn btn-primary" onclick="saveProductFromForm(event)">Lưu</button>
-                <button type="button" class="btn btn-secondary" onclick="closeProductForm()">Hủy</button>
+            <form id="productForm">
+              <div class="form-grid admin-form-grid">
+                <div class="field field-wide"><label for="productName">Tên sản phẩm</label><input id="productName" name="name" required /></div>
+                <div class="field"><label for="productCategory">Danh mục</label><input id="productCategory" name="category" required /></div>
+                <div class="field"><label for="productBrand">Thương hiệu</label><input id="productBrand" name="brand" /></div>
+                <div class="field"><label for="productPrice">Giá mặc định</label><input id="productPrice" name="price" type="number" min="0" placeholder="Có thể lấy từ biến thể đầu tiên" /></div>
+                <div class="field"><label for="productOldPrice">Giá giảm</label><input id="productOldPrice" name="oldPrice" type="number" min="0" placeholder="Giá trước khi giảm" /></div>
+                <div class="field"><label for="productBadge">Nhãn</label><input id="productBadge" name="badge" placeholder="Ví dụ: Mới" /></div>
+                <div class="field"><label for="productMaterial">Chất liệu</label><input id="productMaterial" name="material" /></div>
+                <div class="field"><label for="productSize">Kích thước</label><input id="productSize" name="size" /></div>
+                <div class="field field-wide"><label for="productImage">Ảnh đại diện (URL, tùy chọn)</label><input id="productImage" name="image" type="url" placeholder="https://..." /></div>
+                <div class="field field-wide"><label for="productImages">Tải nhiều ảnh</label><input id="productImages" name="images" type="file" accept="image/*" multiple /><small>Chọn nhiều ảnh cùng lúc. Ảnh đầu tiên sẽ làm ảnh đại diện.</small><div id="imagePreview" class="image-preview"></div></div>
+                <div class="field field-wide"><label>Thuộc tính và biến thể</label><small>Thêm nhóm thuộc tính như Độ dày, Khổ rộng hoặc Chất liệu. Nhập giá trị rồi nhấn Enter, hệ thống sẽ tự sinh mọi tổ hợp.</small><div id="attributeBuilder" class="attribute-builder"></div><button class="btn btn-secondary variant-add" id="addAttributeBtn" type="button">+ Thêm thuộc tính</button><div id="variantTable" class="variant-table-wrap"></div></div>
+                <div class="field field-wide"><label for="productDescription">Mô tả</label><textarea id="productDescription" name="description" rows="4"></textarea></div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary" type="button" data-close-product-form>Hủy</button>
+                <button class="btn btn-primary" type="submit">Lưu sản phẩm</button>
               </div>
             </form>
+            </div>
           </div>
 
           <div class="admin-table">

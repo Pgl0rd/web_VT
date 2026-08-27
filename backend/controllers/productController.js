@@ -1,9 +1,6 @@
 // productController.js
 const db = require('../config/database');
-let Product;
-if (db.connected()) {
-  Product = require('../models/Product');
-}
+const Product = require('../models/Product');
 const store = require('../data/store');
 
 exports.list = async (req, res) => {
@@ -36,6 +33,7 @@ exports.get = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
+    console.log('Creating product:', req.body.name);
     if (db.connected()) {
       const p = new Product(req.body);
       await p.save();
@@ -44,20 +42,23 @@ exports.create = async (req, res) => {
     const p = await store.create(req.body);
     return res.status(201).json(p);
   } catch (err) {
-    res.status(400).json({ error: 'Invalid data' });
+    console.error('Create product failed:', err.message);
+    res.status(400).json({ error: err.message || 'Invalid data' });
   }
 };
 
 exports.update = async (req, res) => {
   try {
     if (db.connected()) {
-      const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+      if (!p) return res.status(404).json({ error: 'Not found' });
       return res.json(p);
     }
     const p = await store.update(req.params.id, req.body);
     return res.json(p);
   } catch (err) {
-    res.status(400).json({ error: 'Invalid data' });
+    console.error('Update product failed:', err.message);
+    res.status(400).json({ error: err.message || 'Invalid data' });
   }
 };
 

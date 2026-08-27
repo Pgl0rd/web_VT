@@ -117,9 +117,24 @@ let products = [
 
 const PRODUCT_STORAGE_KEY = "nvtCart";
 const PRODUCT_LIST_KEY = "nvtProducts";
-// initialize product list in storage on first load
-function initProductsStorage() {
+let selectedProductImages = [];
+let productAttributes = [];
+let productVariants = [];
+let removedVariantNames = new Set();
+function normalizeProduct(product) {
+  return { ...product, id: product.id || product._id, images: product.images && product.images.length ? product.images : (product.image ? [product.image] : []) };
+}
+
+async function initProductsStorage() {
   try {
+    const response = await fetch('/api/products');
+    if (!response.ok) throw new Error('Products API unavailable');
+    const remoteProducts = await response.json();
+    if (Array.isArray(remoteProducts) && remoteProducts.length) {
+      products = remoteProducts.map(normalizeProduct);
+      localStorage.setItem(PRODUCT_LIST_KEY, JSON.stringify(products));
+      return;
+    }
     const stored = localStorage.getItem(PRODUCT_LIST_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
@@ -184,7 +199,7 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
   const grid = document.getElementById(containerId);
   if (!grid) return;
 
-  const search = (options.search ?? document.getElementById("searchInput")?.value || "").toLowerCase();
+  const search = (options.search ?? document.getElementById("searchInput")?.value ?? "").toLowerCase();
   const category = options.category ?? document.getElementById("categoryFilter")?.value ?? "all";
   const sort = options.sort ?? document.getElementById("sortSelect")?.value ?? "featured";
 
@@ -208,13 +223,13 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
     <article class="product-card">
       <div class="product-media">
         <span class="badge">${product.badge}</span>
-        <div class="wishlist">♡</div>
+        <button class="wishlist" type="button">Yêu thích</button>
         <img src="${product.image}" alt="${product.name}">
       </div>
       <div class="product-body">
         <div class="product-meta">
           <span>${product.category}</span>
-          <span class="rating">★ ${product.rating}</span>
+          <span class="rating">Đánh giá ${product.rating}</span>
         </div>
         <h3 class="product-name">${product.name}</h3>
         <div class="price-row">
@@ -230,7 +245,7 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
   `).join("");
 
   document.querySelectorAll("[data-add-cart]").forEach(btn => {
-    btn.addEventListener("click", () => addToCart(Number(btn.dataset.addCart)));
+    btn.addEventListener("click", () => addToCart(btn.dataset.addCart));
   });
 
   document.querySelectorAll("[data-view-product]").forEach(btn => {
@@ -376,11 +391,25 @@ function renderAdminProducts() {
 
   // bind actions
   tbody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => openProductForm(Number(btn.dataset.edit)));
+    btn.addEventListener('click', () => openProductForm(btn.dataset.edit));
   });
   tbody.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deleteProduct(Number(btn.dataset.delete)));
+    btn.addEventListener('click', () => deleteProduct(btn.dataset.delete));
   });
+}
+
+function showAdminToast(message, type = 'success') {
+  let toast = document.getElementById('adminToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'adminToast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.className = `admin-toast ${type}`;
+  clearTimeout(showAdminToast.timer);
+  showAdminToast.timer = setTimeout(() => toast.classList.remove('visible'), 3200);
+  requestAnimationFrame(() => toast.classList.add('visible'));
 }
 
 function openProductForm(id) {
@@ -388,8 +417,14 @@ function openProductForm(id) {
   if (!form) return;
   form.reset();
   form.dataset.editId = '';
+  selectedProductImages = [];
+  productAttributes = [];
+  productVariants = [];
+  removedVariantNames = new Set();
+  renderImagePreviews();
+  renderVariantModule();
   if (id) {
-    const p = products.find(x => x.id === id);
+    const p = products.find(x => String(x.id) === String(id));
     if (!p) return alert('Sản phẩm không tồn tại');
     form.dataset.editId = id;
     form.querySelector('[name="name"]').value = p.name || '';
@@ -402,7 +437,27 @@ function openProductForm(id) {
     form.querySelector('[name="size"]').value = p.size || '';
     form.querySelector('[name="description"]').value = p.description || '';
     form.querySelector('[name="brand"]').value = p.brand || '';
+    selectedProductImages = p.images && p.images.length ? [...p.images] : (p.image ? [p.image] : []);
+    productAttributes = Array.isArray(p.attributes) ? p.attributes.map(attribute => ({ name: attribute.name || '', values: [...(attribute.values || [])] })) : [];
+    productVariants = Array.isArray(p.variants) ? p.variants.map(variant => ({ ...variant, values: [...(variant.values || [])] })) : [];
+    if (!productAttributes.length && productVariants.length) {
+      const attributeValues = new Map();
+      productVariants.forEach(variant => (variant.values || []).forEach((value, index) => {
+        if (!attributeValues.has(index)) attributeValues.set(index, new Set());
+        attributeValues.get(index).add(value);
+      }));
+      productAttributes = [...attributeValues.values()].map((values, index) => ({ name: `Thuộc tính ${index + 1}`, values: [...values] }));
+    }
+    if (productAttributes.length && productVariants.length) {
+      const savedVariantNames = new Set(productVariants.map(variant => variant.name));
+      const generatedNames = generateVariants(productAttributes, []).map(variant => variant.name);
+      removedVariantNames = new Set(generatedNames.filter(name => !savedVariantNames.has(name)));
+    }
+    renderImagePreviews();
+    renderVariantModule();
   }
+  const title = document.getElementById('productFormTitle');
+  if (title) title.textContent = id ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm mới';
   document.getElementById('productFormWrap').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -412,47 +467,288 @@ function closeProductForm() {
   if (wrap) wrap.classList.add('hidden');
 }
 
-function saveProductFromForm(e) {
+function renderImagePreviews() {
+  const preview = document.getElementById('imagePreview');
+  if (!preview) return;
+  preview.innerHTML = selectedProductImages.map((image, index) => `
+    <div class="image-preview-item">
+      <img src="${image}" alt="Ảnh sản phẩm ${index + 1}">
+      <button type="button" data-remove-image="${index}">Xóa</button>
+    </div>
+  `).join('');
+  preview.querySelectorAll('[data-remove-image]').forEach(button => {
+    button.addEventListener('click', () => {
+      selectedProductImages.splice(Number(button.dataset.removeImage), 1);
+      renderImagePreviews();
+    });
+  });
+}
+
+function readImageFiles(files) {
+  return Promise.all([...files].map(file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  })));
+}
+
+function generateVariants(attributes, previousVariants = []) {
+  const usable = attributes.filter(attribute => attribute.name.trim() && attribute.values.length);
+  if (!usable.length) return [];
+  const combinations = usable.reduce((result, attribute) => result.flatMap(prefix => attribute.values.map(value => [...prefix, value])), [[]]);
+  const previousByName = new Map(previousVariants.map(variant => [variant.name, variant]));
+  return combinations.map(values => {
+    const selections = values.map((value, index) => ({ name: usable[index].name, value }));
+    const name = selections.map(selection => `${selection.name}: ${selection.value}`).join(' - ');
+    const previous = previousByName.get(name);
+    return { name, values, selections, price: previous?.price || 0, oldPrice: previous?.oldPrice || 0, active: previous?.active !== false };
+  }).filter(variant => !removedVariantNames.has(variant.name));
+}
+
+function renderVariantModule() {
+  const builder = document.getElementById('attributeBuilder');
+  if (!builder) return;
+  builder.innerHTML = AttributeBuilder(productAttributes);
+  bindAttributeBuilder();
+  productVariants = generateVariants(productAttributes, productVariants);
+  const table = document.getElementById('variantTable');
+  if (table) {
+    table.innerHTML = `${VariantTable(productVariants)}${CustomVariantBuilder(productAttributes)}`;
+    bindVariantTable();
+    bindCustomVariantBuilder();
+  }
+}
+
+function AttributeBuilder(attributes) {
+  return attributes.map((attribute, index) => `<div class="attribute-card" data-attribute-index="${index}">
+    <div class="attribute-card-head"><input data-attribute-name value="${attribute.name}" placeholder="Tên thuộc tính, ví dụ: Độ dày"><button class="btn-small" type="button" data-remove-attribute="${index}">Xóa nhóm</button></div>
+    <div class="attribute-tags">${attribute.values.map((value, valueIndex) => `<span class="attribute-tag">${value}<button type="button" data-remove-value="${valueIndex}">x</button></span>`).join('')}</div>
+    <input data-add-value placeholder="Nhập giá trị rồi nhấn Enter">
+  </div>`).join('');
+}
+
+function VariantTable(variants) {
+  if (!variants.length) return '<div class="variant-empty">Thêm thuộc tính và giá trị để tự động tạo biến thể.</div>';
+  return `<div class="bulk-toolbar"><span>Cập nhật nhanh</span><input id="bulkPrice" type="number" min="0" placeholder="Giá bán chung"><input id="bulkOldPrice" type="number" min="0" placeholder="Giá giảm chung"><button class="btn btn-secondary" id="applyBulkPrice" type="button">Áp dụng tất cả</button></div><div class="variant-table-scroll"><table><thead><tr><th>Tên biến thể</th><th>Giá bán</th><th>Giá giảm</th><th>Trạng thái</th><th></th></tr></thead><tbody>${variants.map((variant, index) => `<tr data-variant-index="${index}"><td>${variant.name}</td><td><input data-variant-field="price" type="number" min="0" value="${variant.price || ''}"></td><td><input data-variant-field="oldPrice" type="number" min="0" value="${variant.oldPrice || ''}"></td><td><button class="variant-status ${variant.active !== false ? 'active' : ''}" type="button" data-toggle-variant>${variant.active !== false ? 'Đang bán' : 'Tạm ẩn'}</button></td><td><button class="variant-remove" type="button" data-remove-generated-variant aria-label="Xóa biến thể">x</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function CustomVariantBuilder(attributes) {
+  const usable = attributes.filter(attribute => attribute.name.trim() && attribute.values.length);
+  if (!usable.length) return '';
+  return `<div class="custom-variant-builder"><div><strong>Tạo biến thể tùy chọn</strong><small>Chọn một giá trị ở mỗi thuộc tính để thêm lựa chọn riêng.</small></div><div class="custom-variant-fields">${usable.map((attribute, index) => `<label>${attribute.name}<select data-custom-attribute="${index}"><option value="">Chọn giá trị</option>${attribute.values.map(value => `<option value="${value}">${value}</option>`).join('')}</select></label>`).join('')}</div><button class="btn btn-secondary" id="createCustomVariant" type="button">Thêm biến thể đã chọn</button></div>`;
+}
+
+function bindCustomVariantBuilder() {
+  document.getElementById('createCustomVariant')?.addEventListener('click', () => {
+    const fields = [...document.querySelectorAll('[data-custom-attribute]')];
+    if (fields.some(field => !field.value)) return showAdminToast('Hãy chọn đủ giá trị cho các thuộc tính.', 'error');
+    const selections = fields.map(field => ({ name: productAttributes[Number(field.dataset.customAttribute)].name, value: field.value }));
+    const name = selections.map(selection => `${selection.name}: ${selection.value}`).join(' - ');
+    if (productVariants.some(variant => variant.name === name)) return showAdminToast('Biến thể này đã tồn tại.', 'error');
+    productVariants.push({ name, values: selections.map(selection => selection.value), selections, price: 0, oldPrice: 0, active: true });
+    renderVariantModule();
+    showAdminToast('Đã thêm biến thể tùy chọn.');
+  });
+}
+
+function bindAttributeBuilder() {
+  document.querySelectorAll('[data-attribute-name]').forEach(input => input.addEventListener('input', event => {
+    const index = Number(event.target.closest('[data-attribute-index]').dataset.attributeIndex);
+    productAttributes[index].name = event.target.value;
+    productVariants = generateVariants(productAttributes, productVariants);
+    const table = document.getElementById('variantTable');
+    if (table) {
+      table.innerHTML = VariantTable(productVariants);
+      bindVariantTable();
+    }
+  }));
+  const addValues = input => {
+    const values = input.value.split('|').map(value => value.trim()).filter(Boolean);
+    const index = Number(input.closest('[data-attribute-index]').dataset.attributeIndex);
+    values.forEach(value => {
+      if (!productAttributes[index].values.includes(value)) productAttributes[index].values.push(value);
+    });
+    input.value = '';
+    renderVariantModule();
+  };
+  document.querySelectorAll('[data-add-value]').forEach(input => input.addEventListener('input', event => {
+    if (event.target.value.includes('|')) addValues(event.target);
+  }));
+  document.querySelectorAll('[data-add-value]').forEach(input => input.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (event.target.value.trim()) addValues(event.target);
+  }));
+  document.querySelectorAll('[data-add-value]').forEach(input => input.addEventListener('blur', event => {
+    if (event.target.value.trim()) addValues(event.target);
+  }));
+  document.querySelectorAll('[data-remove-value]').forEach(button => button.addEventListener('click', event => {
+    const card = event.target.closest('[data-attribute-index]');
+    productAttributes[Number(card.dataset.attributeIndex)].values.splice(Number(button.dataset.removeValue), 1);
+    renderVariantModule();
+  }));
+  document.querySelectorAll('[data-remove-attribute]').forEach(button => button.addEventListener('click', () => {
+    productAttributes.splice(Number(button.dataset.removeAttribute), 1);
+    renderVariantModule();
+  }));
+}
+
+function bindVariantTable() {
+  document.querySelectorAll('[data-variant-field]').forEach(input => input.addEventListener('input', event => {
+    const index = Number(event.target.closest('[data-variant-index]').dataset.variantIndex);
+    productVariants[index][event.target.dataset.variantField] = Number(event.target.value) || 0;
+  }));
+  document.querySelectorAll('[data-toggle-variant]').forEach(button => button.addEventListener('click', event => {
+    const index = Number(event.target.closest('[data-variant-index]').dataset.variantIndex);
+    productVariants[index].active = productVariants[index].active === false;
+    event.target.classList.toggle('active', productVariants[index].active);
+    event.target.textContent = productVariants[index].active ? 'Đang bán' : 'Tạm ẩn';
+  }));
+  document.querySelectorAll('[data-remove-generated-variant]').forEach(button => button.addEventListener('click', event => {
+    const row = event.target.closest('[data-variant-index]');
+    const index = Number(row.dataset.variantIndex);
+    const variant = productVariants[index];
+    if (!variant) return;
+    removedVariantNames.add(variant.name);
+    productVariants.splice(index, 1);
+    renderVariantModule();
+    showAdminToast('Đã xóa biến thể khỏi danh sách.');
+  }));
+  document.getElementById('applyBulkPrice')?.addEventListener('click', () => {
+    const price = Number(document.getElementById('bulkPrice').value);
+    const oldPrice = Number(document.getElementById('bulkOldPrice').value);
+    productVariants = productVariants.map(variant => ({ ...variant, price: price || variant.price, oldPrice: oldPrice || variant.oldPrice }));
+    renderVariantModule();
+  });
+}
+
+function bindAdminProductForm() {
+  const form = document.getElementById('productForm');
+  if (!form) return;
+  const imageInput = document.getElementById('productImages');
+  if (imageInput) imageInput.addEventListener('change', async event => {
+    try {
+      selectedProductImages = await readImageFiles(event.target.files);
+      renderImagePreviews();
+    } catch (error) {
+      alert('Không thể đọc ảnh đã chọn');
+    }
+  });
+  document.querySelectorAll('[data-close-product-form]').forEach(button => {
+    button.addEventListener('click', closeProductForm);
+  });
+  const openButton = document.getElementById('openProductFormBtn');
+  if (openButton) openButton.addEventListener('click', () => openProductForm());
+  const refreshButton = document.getElementById('refreshProductsBtn');
+  if (refreshButton) refreshButton.addEventListener('click', renderAdminProducts);
+  const addAttributeButton = document.getElementById('addAttributeBtn');
+  if (addAttributeButton) addAttributeButton.addEventListener('click', () => {
+    productAttributes.push({ name: '', values: [] });
+    renderVariantModule();
+  });
+  form.addEventListener('submit', saveProductFromForm);
+}
+
+async function saveProductFromForm(e) {
   if (e && e.preventDefault) e.preventDefault();
   const form = document.getElementById('productForm');
   if (!form) return;
-  const id = form.dataset.editId ? Number(form.dataset.editId) : null;
+  if (form.dataset.saving === 'true') return;
+  const id = form.dataset.editId || null;
+  const submitButton = form.querySelector('button[type="submit"]');
   const data = {
     name: form.querySelector('[name="name"]').value.trim(),
     category: form.querySelector('[name="category"]').value.trim(),
-    price: Number(form.querySelector('[name="price"]').value) || 0,
-    oldPrice: Number(form.querySelector('[name="oldPrice"]').value) || 0,
+    price: Number(form.querySelector('[name="price"]').value) || productVariants.find(variant => variant.active !== false)?.price || 0,
+    oldPrice: Number(form.querySelector('[name="oldPrice"]').value) || productVariants.find(variant => variant.active !== false)?.oldPrice || 0,
     badge: form.querySelector('[name="badge"]').value.trim(),
     image: form.querySelector('[name="image"]').value.trim(),
+    images: selectedProductImages.length ? [...selectedProductImages] : [],
     material: form.querySelector('[name="material"]').value.trim(),
     size: form.querySelector('[name="size"]').value.trim(),
     description: form.querySelector('[name="description"]').value.trim(),
     brand: form.querySelector('[name="brand"]').value.trim() || 'Nệm Văn Thanh'
+    ,attributes: productAttributes.filter(attribute => attribute.name && attribute.values.length)
+    ,variants: productVariants
   };
 
   if (!data.name) return alert('Tên sản phẩm không được để trống');
+  if (!data.image && data.images.length) data.image = data.images[0];
+  form.dataset.saving = 'true';
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = id ? 'Đang cập nhật...' : 'Đang lưu...';
+  }
 
-  if (id) {
-    const idx = products.findIndex(p => p.id === id);
-    if (idx === -1) return alert('Sản phẩm không tồn tại');
-    products[idx] = { ...products[idx], ...data };
-  } else {
-    const newId = getNextProductId();
-    products.push({ id: newId, rating: 5, reviews: 0, ...data });
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(id ? `/api/products/${id}` : '/api/products', {
+      method: id ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.error || 'Không thể lưu sản phẩm');
+    }
+    const savedProduct = normalizeProduct(await response.json());
+    if (id) {
+      const idx = products.findIndex(p => String(p.id) === String(id));
+      if (idx === -1) return alert('Sản phẩm không tồn tại');
+      products[idx] = { ...products[idx], ...savedProduct };
+    } else {
+      products.push(savedProduct);
+    }
+  } catch (error) {
+    const message = error.name === 'AbortError' ? 'Lưu quá lâu và đã bị hủy. Hãy thử lại.' : `Lưu sản phẩm thất bại: ${error.message}`;
+    showAdminToast(message, 'error');
+    form.dataset.saving = 'false';
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = id ? 'Cập nhật sản phẩm' : 'Lưu sản phẩm';
+    }
+    return;
   }
 
   persistProducts();
   renderAdminProducts();
   renderProductGrid();
   closeProductForm();
+  form.dataset.saving = 'false';
+  showAdminToast(id ? 'Đã cập nhật sản phẩm trong MongoDB.' : 'Đã thêm sản phẩm vào MongoDB.');
 }
 
-function deleteProduct(id) {
+async function deleteProduct(id) {
   if (!confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
-  products = products.filter(p => p.id !== id);
+  const row = document.querySelector(`[data-delete="${id}"]`)?.closest('tr');
+  if (row?.dataset.deleting === 'true') return;
+  if (row) {
+    row.dataset.deleting = 'true';
+    row.querySelectorAll('button').forEach(button => {
+      button.disabled = true;
+      if (button.dataset.delete === String(id)) button.textContent = 'Đang xóa...';
+    });
+  }
+  try {
+    const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Không thể xóa sản phẩm');
+    products = products.filter(p => String(p.id) !== String(id));
+  } catch (error) {
+    if (row) {
+      row.dataset.deleting = 'false';
+      row.querySelectorAll('button').forEach(button => button.disabled = false);
+    }
+    showAdminToast('Xóa sản phẩm thất bại. Hãy kiểm tra server.', 'error');
+    return;
+  }
   persistProducts();
   renderAdminProducts();
   renderProductGrid();
+  showAdminToast('Đã xóa sản phẩm khỏi MongoDB.');
 }
 
 function renderProductDetail() {
@@ -460,66 +756,86 @@ function renderProductDetail() {
   if (!root) return;
 
   const params = new URLSearchParams(window.location.search);
-  const productId = Number(params.get("id") || 1);
-  const product = products.find(item => item.id === productId) || products[0];
+  const productId = params.get("id") || "1";
+  const product = products.find(item => String(item.id) === String(productId)) || products[0];
+  const productImages = product.images && product.images.length ? product.images : [product.image];
+  const discountAmount = Math.max(0, (product.oldPrice || 0) - product.price);
+  const discountPercent = product.oldPrice ? Math.round((discountAmount / product.oldPrice) * 100) : 0;
+  const variants = Array.isArray(product.variants) && product.variants.length ? product.variants : [{ name: 'Tiêu chuẩn', thickness: '', width: product.size || '', material: product.material || '', price: product.price, oldPrice: product.oldPrice }];
+  const firstVariant = variants[0];
+  const firstValues = firstVariant.values || [firstVariant.width, firstVariant.thickness, firstVariant.material].filter(Boolean);
+  const variantAttributes = product.attributes?.length ? product.attributes : (firstVariant.selections?.length ? firstVariant.selections.map(selection => ({ name: selection.name, values: [...new Set(variants.map(variant => variant.selections?.find(item => item.name === selection.name)?.value).filter(Boolean))] })) : []);
+  const relatedProducts = products
+    .filter(item => String(item.id) !== String(product.id) && (item.category === product.category || item.brand === product.brand))
+    .slice(0, 4);
 
   root.innerHTML = `
-    <div class="detail-gallery">
-      <img class="detail-main-image" src="${product.image}" alt="${product.name}">
-      <div class="thumbs">
-        <img src="${product.image}" alt="${product.name}">
-        <img src="${product.image}" alt="${product.name}">
-        <img src="${product.image}" alt="${product.name}">
-        <img src="${product.image}" alt="${product.name}">
+    <div class="detail-top">
+      <div class="detail-gallery">
+        <div class="detail-main-frame">
+          <span class="detail-badge">${product.badge || 'Được yêu thích'}</span>
+          <img class="detail-main-image" id="detailMainImage" src="${productImages[0]}" alt="${product.name}">
+          <button class="gallery-control gallery-prev" type="button" id="galleryPrev">Trước</button>
+          <button class="gallery-control gallery-next" type="button" id="galleryNext">Sau</button>
+        </div>
+        <div class="thumbs" role="tablist">${productImages.map((image, index) => `<button class="thumb ${index === 0 ? 'active' : ''}" type="button" data-image-index="${index}" role="tab"><img src="${image}" alt="${product.name}, ảnh ${index + 1}"></button>`).join('')}</div>
+        <p class="gallery-count"><span id="galleryCurrent">1</span> / ${productImages.length} ảnh</p>
+      </div>
+      <div class="detail-box">
+        <span class="eyebrow">${product.category}</span>
+        <h1>${product.name}</h1>
+        <p class="detail-summary">${product.description || 'Thiết kế êm ái, nâng đỡ cơ thể và mang lại cảm giác thư giãn trọn vẹn cho giấc ngủ mỗi ngày.'}</p>
+        <div class="detail-rating">Đánh giá ${product.rating || 5} <span>•</span> ${product.reviews || 0} nhận xét</div>
+        <div class="detail-price">
+          <span class="price" id="detailPrice">${formatMoney(firstVariant.price)}</span>
+          <span class="old-price" id="detailOldPrice">${firstVariant.oldPrice ? formatMoney(firstVariant.oldPrice) : ''}</span>
+          <span class="discount-label" id="detailDiscount">${firstVariant.oldPrice > firstVariant.price ? `-${Math.round(((firstVariant.oldPrice - firstVariant.price) / firstVariant.oldPrice) * 100)}%` : ''}</span>
+        </div>
+        <p class="saving-note" id="detailSaving">${firstVariant.oldPrice > firstVariant.price ? `Tiết kiệm ${formatMoney(firstVariant.oldPrice - firstVariant.price)}` : ''}</p>
+        <div class="detail-option">
+          <strong>Chọn thông số</strong>
+          <div class="detail-selects">${variantAttributes.map((attribute, index) => `<label class="detail-select-field"><span>${attribute.name}</span><select data-detail-attribute="${index}">${attribute.values.map(value => `<option value="${value}" ${firstVariant.selections?.find(selection => selection.name === attribute.name)?.value === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label>`).join('')}</div>
+          <p class="selected-spec" id="selectedSpec">${firstValues.join(' / ')}</p>
+        </div>
+        <div class="purchase-row">
+          <div class="qty-box"><button type="button" id="detailMinus">-</button><span id="detailQty">1</span><button type="button" id="detailPlus">+</button></div>
+          <button class="btn btn-secondary" id="addDetailCart" type="button">Thêm vào giỏ</button>
+        </div>
+        <button class="btn btn-primary checkout-button" id="buyNowBtn" type="button">Mua ngay</button>
+        <div class="detail-promises"><span>Giao hàng nhanh</span><span>Bảo hành rõ ràng</span><span>Đổi trả linh hoạt</span></div>
       </div>
     </div>
-    <div class="detail-box">
-      <span class="eyebrow">${product.category}</span>
-      <h2>${product.name}</h2>
-      <div class="detail-price">
-        <span class="price">${formatMoney(product.price)}</span>
-        <span class="old-price">${formatMoney(product.oldPrice)}</span>
-        <span class="stock">✓ Còn hàng</span>
+    <section class="detail-information">
+      <div class="detail-description">
+        <span class="eyebrow">Thông tin sản phẩm</span>
+        <h2>Thoải mái hơn trong từng chuyển động</h2>
+        <p>${product.description || 'Sản phẩm được hoàn thiện từ vật liệu chọn lọc, cân bằng giữa độ êm và khả năng nâng đỡ. Bề mặt thoáng khí giúp duy trì cảm giác dễ chịu trong suốt thời gian nghỉ ngơi.'}</p>
       </div>
-      <p style="color: var(--muted);">Nệm được thiết kế với lớp hỗ trợ cột sống, khả năng thoáng khí và ít gây mỏi cổ, gáy, lưng.</p>
-
-      <div>
-        <strong>Kích thước</strong>
-        <div class="variant-list">
-          <span class="variant active">1m2</span>
-          <span class="variant">1m4</span>
-          <span class="variant">1m6</span>
-          <span class="variant">1m8</span>
-        </div>
+      <div class="detail-specs">
+        <div><span>Thương hiệu</span><strong>${product.brand || 'Nệm Văn Thanh'}</strong></div>
+        <div><span>Chất liệu</span><strong>${product.material || 'Đang cập nhật'}</strong></div>
+        <div><span>Kích thước</span><strong>${product.size || 'Đang cập nhật'}</strong></div>
+        <div><span>Tình trạng</span><strong>Còn hàng</strong></div>
       </div>
-
-      <div style="margin-top: 12px;">
-        <strong>Chất liệu</strong>
-        <div class="variant-list">
-          <span class="variant active">${product.material}</span>
-          <span class="variant">Lò xo</span>
-          <span class="variant">Mousse</span>
-        </div>
-      </div>
-
-      <div class="qty-row">
-        <div class="qty-box">
-          <button type="button" id="detailMinus">−</button>
-          <span id="detailQty">1</span>
-          <button type="button" id="detailPlus">+</button>
-        </div>
-        <button class="btn btn-primary" id="buyNowBtn">Thêm vào giỏ hàng</button>
-      </div>
-
-      <div class="detail-actions">
-        <button class="btn btn-secondary">Tư vấn miễn phí</button>
-        <button class="btn btn-secondary">Yêu thích</button>
-      </div>
-    </div>
+    </section>
+    <section class="related-products">
+      <div class="related-heading"><div><span class="eyebrow">Có thể bạn sẽ thích</span><h2>Sản phẩm liên quan</h2></div><a href="san-pham.html">Xem tất cả</a></div>
+      <div class="product-grid related-grid">${relatedProducts.map(item => `<article class="product-card"><div class="product-media"><img src="${item.image}" alt="${item.name}"></div><div class="product-body"><div class="product-meta"><span>${item.category}</span><span>Đánh giá ${item.rating || 5}</span></div><h3 class="product-name">${item.name}</h3><div class="price-row"><span class="price">${formatMoney(item.price)}</span><span class="old-price">${item.oldPrice ? formatMoney(item.oldPrice) : ''}</span></div><div class="product-actions"><button class="btn btn-primary" type="button" data-related-add="${item.id}">Thêm vào giỏ</button><button class="btn-small" type="button" data-related-view="${item.id}">Xem</button></div></div></article>`).join('')}</div>
+    </section>
   `;
 
   const qtyEl = document.getElementById("detailQty");
-  const buyBtn = document.getElementById("buyNowBtn");
+  let currentImage = 0;
+  const mainImage = document.getElementById('detailMainImage');
+  const updateGallery = index => {
+    currentImage = (index + productImages.length) % productImages.length;
+    mainImage.src = productImages[currentImage];
+    document.getElementById('galleryCurrent').textContent = currentImage + 1;
+    document.querySelectorAll('.thumb').forEach((thumb, thumbIndex) => thumb.classList.toggle('active', thumbIndex === currentImage));
+  };
+  document.getElementById('galleryPrev')?.addEventListener('click', () => updateGallery(currentImage - 1));
+  document.getElementById('galleryNext')?.addEventListener('click', () => updateGallery(currentImage + 1));
+  document.querySelectorAll('.thumb').forEach(thumb => thumb.addEventListener('click', () => updateGallery(Number(thumb.dataset.imageIndex))));
 
   document.getElementById("detailMinus")?.addEventListener("click", () => {
     let value = Number(qtyEl.textContent || 1);
@@ -533,17 +849,34 @@ function renderProductDetail() {
     qtyEl.textContent = value;
   });
 
-  buyBtn?.addEventListener("click", () => {
+  const addSelectedProduct = () => {
     const qty = Number(qtyEl.textContent || 1);
     addToCart(product.id, qty);
+  };
+  document.getElementById("addDetailCart")?.addEventListener("click", addSelectedProduct);
+  document.getElementById("buyNowBtn")?.addEventListener("click", () => {
+    addSelectedProduct();
+    window.location.href = 'thanh-toan.html';
   });
 
-  document.querySelectorAll(".variant").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".variant").forEach(el => el.classList.remove("active"));
-      btn.classList.add("active");
-    });
-  });
+  const updateSelectedVariant = () => {
+      const selections = [...document.querySelectorAll('[data-detail-attribute]')].map(select => ({ name: variantAttributes[Number(select.dataset.detailAttribute)].name, value: select.value }));
+      const selected = variants.find(variant => selections.every(selection => variant.selections?.some(item => item.name === selection.name && item.value === selection.value)));
+      if (!selected) {
+        document.getElementById('selectedSpec').textContent = 'Thông số này hiện chưa có sẵn';
+        return;
+      }
+      document.getElementById('detailPrice').textContent = formatMoney(selected.price);
+      document.getElementById('detailOldPrice').textContent = selected.oldPrice ? formatMoney(selected.oldPrice) : '';
+      document.getElementById('detailDiscount').textContent = selected.oldPrice > selected.price ? `-${Math.round(((selected.oldPrice - selected.price) / selected.oldPrice) * 100)}%` : '';
+      document.getElementById('detailSaving').textContent = selected.oldPrice > selected.price ? `Tiết kiệm ${formatMoney(selected.oldPrice - selected.price)}` : '';
+      document.getElementById('selectedSpec').textContent = (selected.values || [selected.width, selected.thickness, selected.material].filter(Boolean)).join(' / ');
+  };
+  document.querySelectorAll('[data-detail-attribute]').forEach(select => select.addEventListener('change', updateSelectedVariant));
+  document.querySelectorAll('[data-related-add]').forEach(btn => btn.addEventListener('click', () => addToCart(btn.dataset.relatedAdd)));
+  document.querySelectorAll('[data-related-view]').forEach(btn => btn.addEventListener('click', () => {
+    window.location.href = `chi-tiet-san-pham.html?id=${btn.dataset.relatedView}`;
+  }));
 }
 
 function renderHomeProducts() {
@@ -579,9 +912,9 @@ function bindCartLinks() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   // initialize products from storage first
-  initProductsStorage();
+  await initProductsStorage();
   updateCartBadge();
   bindSearchAndFilters();
   setupAccountTabs();
@@ -591,6 +924,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderCartPage();
   bindCheckoutForm();
   bindCartLinks();
+  bindAdminProductForm();
 
   if (document.getElementById("productGrid")) {
     renderHomeProducts();

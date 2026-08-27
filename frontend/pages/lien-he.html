@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Liên hệ | Nệm Văn Thanh</title>
+    <link rel="stylesheet" href="../css/styles.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="container topbar-inner">
+        <div class="top-links">
+          <a href="index.html">Trang chủ</a>
+          <a href="san-pham.html">Sản phẩm</a>
+          <a href="blog.html">Tin tức</a>
+        </div>
+        <div class="hotline">Hotline: 0909 123 456</div>
+      </div>
+    </div>
+
+    <header class="site-header">
+      <div class="container site-nav">
+        <a href="index.html" class="brand">
+          <span class="brand-mark">N</span>
+          <span>Nệm Văn Thanh</span>
+        </a>
+        <nav class="main-nav">
+          <a href="index.html">Trang chủ</a>
+          <a href="san-pham.html">Sản phẩm</a>
+          <a href="ve-chung-toi.html">Giới thiệu</a>
+          <a href="blog.html">Blog</a>
+          <a href="lien-he.html" aria-current="page">Liên hệ</a>
+        </nav>
+        <div class="nav-actions">
+          <a href="gio-hang.html" class="cart-button" aria-label="Giỏ hàng" data-cart-link>
+            Giỏ hàng
+            <span class="cart-badge" id="cartCount">0</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container">
+          <div class="section-head">
+            <h1>Liên hệ với chúng tôi</h1>
+            <p>Để lại thông tin, đội ngũ Nệm Văn Thanh sẽ tư vấn sản phẩm phù hợp.</p>
+          </div>
+          <div class="contact-grid">
+            <div class="feature-box">
+              <h2>Thông tin cửa hàng</h2>
+              <p><strong>Hotline:</strong> 0909 123 456</p>
+              <p><strong>Email:</strong> lienhe@nemvanthanh.vn</p>
+              <p><strong>Giờ làm việc:</strong> 08:00 - 21:00 mỗi ngày</p>
+            </div>
+            <form class="feature-box" onsubmit="event.preventDefault(); alert('Cảm ơn bạn! Chúng tôi sẽ liên hệ sớm.');">
+              <h2>Nhận tư vấn</h2>
+              <p><label for="contactName">Họ và tên</label></p>
+              <input id="contactName" name="name" type="text" required />
+              <p><label for="contactPhone">Số điện thoại</label></p>
+              <input id="contactPhone" name="phone" type="tel" required />
+              <p><label for="contactMessage">Nội dung</label></p>
+              <textarea id="contactMessage" name="message" rows="4"></textarea>
+              <button class="btn btn-primary" type="submit">Gửi yêu cầu</button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
