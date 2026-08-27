@@ -1,11 +1,19 @@
 // productController.js
-const Product = require('../models/Product');
+const db = require('../config/database');
+let Product;
+if (db.connected()) {
+  Product = require('../models/Product');
+}
+const store = require('../data/store');
 
 exports.list = async (req, res) => {
-  // placeholder: return empty or sample
   try {
-    const products = await Product.find().limit(100);
-    res.json(products);
+    if (db.connected()) {
+      const products = await Product.find().limit(100);
+      return res.json(products);
+    }
+    const products = await store.list();
+    return res.json(products);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -13,9 +21,14 @@ exports.list = async (req, res) => {
 
 exports.get = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    if (db.connected()) {
+      const product = await Product.findById(req.params.id);
+      if (!product) return res.status(404).json({ error: 'Not found' });
+      return res.json(product);
+    }
+    const product = await store.get(req.params.id);
     if (!product) return res.status(404).json({ error: 'Not found' });
-    res.json(product);
+    return res.json(product);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -23,9 +36,13 @@ exports.get = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const p = new Product(req.body);
-    await p.save();
-    res.status(201).json(p);
+    if (db.connected()) {
+      const p = new Product(req.body);
+      await p.save();
+      return res.status(201).json(p);
+    }
+    const p = await store.create(req.body);
+    return res.status(201).json(p);
   } catch (err) {
     res.status(400).json({ error: 'Invalid data' });
   }
@@ -33,8 +50,12 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
-    const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(p);
+    if (db.connected()) {
+      const p = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      return res.json(p);
+    }
+    const p = await store.update(req.params.id, req.body);
+    return res.json(p);
   } catch (err) {
     res.status(400).json({ error: 'Invalid data' });
   }
@@ -42,8 +63,12 @@ exports.update = async (req, res) => {
 
 exports.remove = async (req, res) => {
   try {
-    await Product.findByIdAndDelete(req.params.id);
-    res.json({ ok: true });
+    if (db.connected()) {
+      await Product.findByIdAndDelete(req.params.id);
+      return res.json({ ok: true });
+    }
+    const ok = await store.remove(req.params.id);
+    return res.json({ ok });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
