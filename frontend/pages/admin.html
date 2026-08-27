@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard | Nệm Văn Thanh</title>
+    <link rel="stylesheet" href="../css/styles.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="container topbar-inner">
+        <div class="top-links">
+          <a href="index.html">Trang chủ</a>
+          <a href="san-pham.html">Sản phẩm</a>
+          <a href="lien-he.html">Liên hệ</a>
+        </div>
+        <div class="hotline">Admin panel</div>
+      </div>
+    </div>
+
+    <header class="site-header">
+      <div class="container site-nav">
+        <a href="index.html" class="brand">
+          <span class="brand-mark">N</span>
+          <span>Nệm Văn Thanh</span>
+        </a>
+
+        <nav class="main-nav">
+          <a href="admin.html">Dashboard</a>
+          <a href="#">Sản phẩm</a>
+          <a href="#">Đơn hàng</a>
+          <a href="#">Khuyến mãi</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container">
+          <div class="section-head">
+            <h2>Admin dashboard</h2>
+            <p>Quản lý sản phẩm, đơn hàng và khuyến mãi</p>
+          </div>
+
+          <div class="admin-grid">
+            <div class="admin-card">
+              <div class="label">Doanh thu</div>
+              <strong>1.84 tỷ</strong>
+            </div>
+            <div class="admin-card">
+              <div class="label">Đơn hàng</div>
+              <strong>2,420</strong>
+            </div>
+            <div class="admin-card">
+              <div class="label">Khách hàng</div>
+              <strong>18,540</strong>
+            </div>
+            <div class="admin-card">
+              <div class="label">Tỷ lệ chuyển đổi</div>
+              <strong>4.6%</strong>
+            </div>
+          </div>
+
+          <!-- Product management -->
+          <div style="margin:18px 0; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <h3 style="margin:0;">Quản lý sản phẩm</h3>
+            <div>
+              <button class="btn btn-primary" onclick="openProductForm()">Thêm sản phẩm mới</button>
+              <button class="btn btn-secondary" onclick="renderAdminProducts()">Làm mới</button>
+            </div>
+          </div>
+
+          <div id="productFormWrap" class="form-card hidden" style="margin-bottom:18px;">
+            <form id="productForm">
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+                <div class="field"><label>Tên sản phẩm</label><input name="name" /></div>
+                <div class="field"><label>Danh mục</label><input name="category" /></div>
+                <div class="field"><label>Thương hiệu</label><input name="brand" /></div>
+                <div class="field"><label>Giá</label><input name="price" type="number" /></div>
+                <div class="field"><label>Giá cũ</label><input name="oldPrice" type="number" /></div>
+                <div class="field"><label>Badge</label><input name="badge" /></div>
+                <div class="field"><label>Chất liệu</label><input name="material" /></div>
+                <div class="field"><label>Kích thước</label><input name="size" /></div>
+                <div class="field"><label>Ảnh (URL)</label><input name="image" /></div>
+                <div class="field" style="grid-column:1/4;"><label>Mô tả</label><textarea name="description" rows="3"></textarea></div>
+              </div>
+              <div style="margin-top:12px; display:flex; gap:8px;">
+                <button class="btn btn-primary" onclick="saveProductFromForm(event)">Lưu</button>
+                <button type="button" class="btn btn-secondary" onclick="closeProductForm()">Hủy</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="admin-table">
+            <table>
+              <thead style="background:#f7faf8;">
+                <tr>
+                  <th>Mã</th>
+                  <th>Tên</th>
+                  <th>Danh mục</th>
+                  <th>Giá</th>
+                  <th>Badge</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="adminProducts"></tbody>
+            </table>
+          </div>
+
+          <hr style="margin:18px 0;" />
+
+          <div class="admin-table">
+            <table>
+              <thead style="background:#f7faf8;">
+                <tr>
+                  <th>Mã đơn</th>
+                  <th>Khách hàng</th>
+                  <th>Giá trị</th>
+                  <th>Trạng thái</th>
+                  <th>Ngày</th>
+                </tr>
+              </thead>
+              <tbody id="adminOrders"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <div class="brand" style="margin-bottom:12px;">
+              <span class="brand-mark">N</span>
+              <span>Nệm Văn Thanh</span>
+            </div>
+            <p style="color:#dfeae7; margin:0; max-width: 260px;">Chuyên cung cấp nệm, ga giường, gối và giải pháp ngủ cho mọi gia đình.</p>
+          </div>
+          <div>
+            <div class="footer-title">Quản lý</div>
+            <div class="footer-links">
+              <a href="#">Sản phẩm</a>
+              <a href="#">Đơn hàng</a>
+              <a href="#">Khuyến mãi</a>
+            </div>
+          </div>
+          <div>
+            <div class="footer-title">Hỗ trợ</div>
+            <div class="footer-links">
+              <a href="lien-he.html">Liên hệ</a>
+              <a href="tai-khoan.html">Tài khoản</a>
+              <a href="gio-hang.html">Giỏ hàng</a>
+            </div>
+          </div>
+          <div>
+            <div class="footer-title">Liên hệ</div>
+            <div class="footer-links">
+              <span>0909 123 456</span>
+              <span>support@nemvanthanh.vn</span>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span>© 2026 Nệm Văn Thanh</span>
+          <span>Chính sách bảo mật • Điều khoản sử dụng</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="../js/app.js"></script>
+  </body>
+</html>

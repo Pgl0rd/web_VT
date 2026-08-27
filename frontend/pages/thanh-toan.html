@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thanh toán | Nệm Văn Thanh</title>
+    <link rel="stylesheet" href="../css/styles.css" />
+  </head>
+  <body>
+    <!-- copied -->
+    <div class="topbar">
+      <div class="container topbar-inner">
+        <div class="top-links">
+          <a href="index.html">Trang chủ</a>
+          <a href="san-pham.html">Sản phẩm</a>
+          <a href="gio-hang.html">Giỏ hàng</a>
+        </div>
+        <div class="hotline">Hotline: 0909 123 456</div>
+      </div>
+    </div>
+
+    <header class="site-header">
+      <div class="container site-nav">
+        <a href="index.html" class="brand">
+          <span class="brand-mark">N</span>
+          <span>Nệm Văn Thanh</span>
+        </a>
+
+        <nav class="main-nav">
+          <a href="index.html">Trang chủ</a>
+          <a href="san-pham.html">Sản phẩm</a>
+          <a href="ve-chung-toi.html">Giới thiệu</a>
+          <a href="blog.html">Blog</a>
+          <a href="lien-he.html">Liên hệ</a>
+        </nav>
+
+        <div class="nav-actions">
+          <a href="gio-hang.html" class="cart-button" aria-label="Giỏ hàng" data-cart-link>
+            🛒
+            <span class="cart-badge" id="cartCount">0</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="container">
+          <div class="section-head">
+            <h2>Thanh toán</h2>
+            <p>Hoàn tất đặt hàng nhanh chóng và an toàn</p>
+          </div>
+
+          <div class="checkout-layout">
+            <div class="form-card">
+              <h3 style="margin-top:0;">Thông tin giao hàng</h3>
+              <form id="checkoutForm">
+                <div class="form-grid">
+                  <div class="field">
+                    <label>Họ tên</label>
+                    <input type="text" placeholder="Nguyễn Văn A" required />
+                  </div>
+                  <div class="field">
+                    <label>Số điện thoại</label>
+                    <input type="tel" placeholder="0909 123 456" required />
+                  </div>
+                  <div class="field full">
+                    <label>Email</label>
+                    <input type="email" placeholder="example@email.com" />
+                  </div>
+                  <div class="field full">
+                    <label>Địa chỉ</label>
+                    <input type="text" placeholder="Số nhà, đường, phường, quận" required />
+                  </div>
+                  <div class="field">
+                    <label>Tỉnh / thành</label>
+                    <select>
+                      <option>Hà Nội</option>
+                      <option>Đà Nẵng</option>
+                      <option>TP.HCM</option>
+                      <option>Khác</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Phương thức thanh toán</label>
+                    <select>
+                      <option>COD</option>
+                      <option>Chuyển khoản ngân hàng</option>
+                      <option>Ví điện tử</option>
+                    </select>
+                  </div>
+                  <div class="field full">
+                    <label>Ghi chú</label>
+                    <textarea rows="4" placeholder="Ghi chú cho đơn hàng"></textarea>
+                  </div>
+                </div>
+
+                <div class="cta-row">
+                  <button type="submit" class="btn btn-primary">Xác nhận đặt hàng</button>
+                  <button type="button" class="btn btn-secondary">Áp mã giảm giá</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="form-card">
+              <h3 style="margin-top:0;">Phương thức vận chuyển</h3>
+              <div class="tabs">
+                <div class="tab active">Giao hàng tiêu chuẩn</div>
+                <div class="tab">Giao nhanh</div>
+                <div class="tab">Lấy tại cửa hàng</div>
+              </div>
+
+              <div class="summary-row">
+                <span>Thời gian giao</span>
+                <strong>24h - 48h</strong>
+              </div>
+              <div class="summary-row">
+                <span>Chính sách đổi trả</span>
+                <strong>30 ngày</strong>
+              </div>
+              <div class="summary-row">
+                <span>Hỗ trợ khách hàng</span>
+                <strong>0909 123 456</strong>
+              </div>
+
+              <div style="margin-top:18px;">
+                <h4 style="margin-bottom:8px;">Tóm tắt</h4>
+                <div class="summary-row">
+                  <span>Tạm tính</span>
+                  <strong id="subtotal">0₫</strong>
+                </div>
+                <div class="summary-row">
+                  <span>Phí vận chuyển</span>
+                  <strong id="shippingFee">0₫</strong>
+                </div>
+                <div class="summary-row">
+                  <span>Giảm giá</span>
+                  <strong id="discount">0₫</strong>
+                </div>
+                <div class="summary-row total">
+                  <span>Tổng tiền</span>
+                  <strong id="total">0₫</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div>
+            <div class="brand" style="margin-bottom:12px;">
+              <span class="brand-mark">N</span>
+              <span>Nệm Văn Thanh</span>
+            </div>
+            <p style="color:#dfeae7; margin:0; max-width: 260px;">Chuyên cung cấp nệm, ga giường, gối và giải pháp ngủ cho mọi gia đình.</p>
+          </div>
+          <div>
+            <div class="footer-title">Sản phẩm</div>
+            <div class="footer-links">
+              <a href="san-pham.html">Nệm</a>
+              <a href="san-pham.html">Ga giường</a>
+              <a href="san-pham.html">Gối</a>
+            </div>
+          </div>
+          <div>
+            <div class="footer-title">Hỗ trợ</div>
+            <div class="footer-links">
+              <a href="lien-he.html">Liên hệ</a>
+              <a href="tai-khoan.html">Tài khoản</a>
+              <a href="gio-hang.html">Giỏ hàng</a>
+            </div>
+          </div>
+          <div>
+            <div class="footer-title">Liên hệ</div>
+            <div class="footer-links">
+              <span>0909 123 456</span>
+              <span>support@nemvanthanh.vn</span>
+            </div>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span>© 2026 Nệm Văn Thanh</span>
+          <span>Chính sách bảo mật • Điều khoản sử dụng</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="../js/app.js"></script>
+  </body>
+</html>
