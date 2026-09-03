@@ -26,7 +26,9 @@ const ProductSchema = new mongoose.Schema({
   material: String,
   size: String,
   badge: String,
+  shortDescription: String,
   description: String,
+  technicalSpecs: String,
   attributes: { type: [AttributeSchema], default: [] },
   variants: { type: [VariantSchema], default: [] },
   createdAt: { type: Date, default: Date.now }

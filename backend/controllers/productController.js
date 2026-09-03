@@ -6,13 +6,14 @@ const store = require('../data/store');
 exports.list = async (req, res) => {
   try {
     if (db.connected()) {
-      const products = await Product.find().limit(100);
+      const products = await Product.find().limit(100).lean();
       return res.json(products);
     }
     const products = await store.list();
     return res.json(products);
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('List products failed:', err.message);
+    res.status(500).json({ error: err.message || 'Server error' });
   }
 };
 

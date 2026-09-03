@@ -117,38 +117,57 @@ let products = [
 
 const PRODUCT_STORAGE_KEY = "nvtCart";
 const PRODUCT_LIST_KEY = "nvtProducts";
+const AUTH_TOKEN_KEY = 'nvtAuthToken';
+const ADMIN_AUTH_TOKEN_KEY = 'nvtAdminAuthToken';
+const CUSTOMER_AUTH_TOKEN_KEY = 'nvtCustomerAuthToken';
+function getAuthToken() {
+  const key = document.getElementById('adminProducts') ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
+  return localStorage.getItem(key) || localStorage.getItem(AUTH_TOKEN_KEY);
+}
+const authHeaders = () => getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {};
 let selectedProductImages = [];
+let productImagesChanged = false;
 let productAttributes = [];
 let productVariants = [];
 let removedVariantNames = new Set();
 function normalizeProduct(product) {
-  return { ...product, id: product.id || product._id, images: product.images && product.images.length ? product.images : (product.image ? [product.image] : []) };
+  return {
+    ...product,
+    id: product.id || product._id,
+    name: product.name || 'Sản phẩm chưa đặt tên',
+    brand: product.brand || '',
+    material: product.material || '',
+    category: product.category || 'Khác',
+    images: product.images && product.images.length ? product.images : (product.image ? [product.image] : [])
+  };
 }
 
 async function initProductsStorage() {
   try {
-    const response = await fetch('/api/products');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    const response = await fetch('/api/products', { signal: controller.signal });
+    clearTimeout(timeout);
     if (!response.ok) throw new Error('Products API unavailable');
     const remoteProducts = await response.json();
-    if (Array.isArray(remoteProducts) && remoteProducts.length) {
+    if (!Array.isArray(remoteProducts)) throw new Error('Invalid products response');
+    if (remoteProducts.length) {
       products = remoteProducts.map(normalizeProduct);
-      localStorage.setItem(PRODUCT_LIST_KEY, JSON.stringify(products));
       return;
     }
-    const stored = localStorage.getItem(PRODUCT_LIST_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length) products = parsed;
-    } else {
-      localStorage.setItem(PRODUCT_LIST_KEY, JSON.stringify(products));
-    }
+    products = [];
   } catch (e) {
     console.error('Failed to init products storage', e);
+    products = [];
   }
 }
 
 function persistProducts() {
-  localStorage.setItem(PRODUCT_LIST_KEY, JSON.stringify(products));
+  try {
+    localStorage.setItem(PRODUCT_LIST_KEY, JSON.stringify(products));
+  } catch (storageError) {
+    console.warn('Product cache unavailable; product was still saved remotely', storageError);
+  }
 }
 
 function getNextProductId() {
@@ -326,7 +345,8 @@ function setupAccountTabs() {
   const panels = {
     login: document.getElementById("loginPanel"),
     register: document.getElementById("registerPanel"),
-    orders: document.getElementById("ordersPanel")
+    orders: document.getElementById("ordersPanel"),
+    profile: document.getElementById("profilePanel")
   };
 
   tabs.forEach(tab => {
@@ -337,6 +357,71 @@ function setupAccountTabs() {
       const target = panels[tab.dataset.tab];
       if (target) target.classList.remove("hidden");
     });
+  });
+}
+
+function renderAuthState() {
+  const user = JSON.parse(localStorage.getItem('nvtUser') || 'null');
+  document.querySelectorAll('.nav-actions a[href="tai-khoan.html"]').forEach(link => {
+    if (user && user.role === 'customer') {
+      link.textContent = user.name || 'Tài khoản';
+      link.classList.add('account-link');
+      link.href = '#';
+      link.setAttribute('aria-haspopup', 'true');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'account-menu-wrap';
+      link.parentNode.insertBefore(wrapper, link);
+      wrapper.appendChild(link);
+      const menu = document.createElement('div');
+      menu.className = 'account-menu hidden';
+      menu.innerHTML = '<a href="tai-khoan.html#profile">Thông tin tài khoản</a><a href="tai-khoan.html#orders">Đơn hàng</a><button type="button" data-account-logout>Đăng xuất</button>';
+      wrapper.appendChild(menu);
+      link.addEventListener('click', event => {
+        event.preventDefault();
+        menu.classList.toggle('hidden');
+      });
+      menu.querySelector('[data-account-logout]').addEventListener('click', () => {
+        localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
+        localStorage.removeItem('nvtUser');
+        window.location.href = 'index.html';
+      });
+    }
+  });
+}
+
+async function setupCustomerAccount() {
+  const profile = document.getElementById('profilePanel');
+  if (!profile) return;
+  const token = localStorage.getItem(CUSTOMER_AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+  const response = await fetch('/api/users/me', { headers: authHeaders() });
+  if (!response.ok) return;
+  const user = await response.json();
+  localStorage.setItem('nvtUser', JSON.stringify({ id: user._id, name: user.name, email: user.email, role: user.role }));
+  profile.querySelector('[name="name"]').value = user.name || '';
+  profile.querySelector('[name="email"]').value = user.email || '';
+  profile.querySelector('[name="phone"]').value = user.phone || '';
+  profile.querySelector('[name="address"]').value = user.address || '';
+  document.getElementById('loginPanel')?.classList.add('hidden');
+  document.getElementById('registerPanel')?.classList.add('hidden');
+  profile.classList.remove('hidden');
+  profile.closest('.account-panel')?.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === 'profile'));
+  if (location.hash === '#orders') profile.closest('.account-panel')?.querySelector('[data-tab="orders"]')?.click();
+  profile.addEventListener('submit', async event => {
+    event.preventDefault();
+    const update = await fetch('/api/users/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(Object.fromEntries(new FormData(profile))) });
+    const result = await update.json();
+    const message = document.getElementById('profileMessage');
+    message.textContent = update.ok ? 'Đã cập nhật thông tin.' : (result.error || 'Không thể cập nhật thông tin.');
+    if (update.ok) {
+      localStorage.setItem('nvtUser', JSON.stringify({ id: result._id, name: result.name, email: result.email, role: result.role }));
+      renderAuthState();
+    }
+  });
+  document.getElementById('logoutBtn')?.addEventListener('click', () => {
+    localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
+    localStorage.removeItem('nvtUser');
+    window.location.href = 'index.html';
   });
 }
 
@@ -418,9 +503,12 @@ function openProductForm(id) {
   form.reset();
   form.dataset.editId = '';
   selectedProductImages = [];
+  productImagesChanged = false;
   productAttributes = [];
   productVariants = [];
   removedVariantNames = new Set();
+  form.querySelector('#productDescription').innerHTML = '';
+  form.querySelector('#productTechnicalSpecs').innerHTML = '';
   renderImagePreviews();
   renderVariantModule();
   if (id) {
@@ -435,7 +523,9 @@ function openProductForm(id) {
     form.querySelector('[name="image"]').value = p.image || '';
     form.querySelector('[name="material"]').value = p.material || '';
     form.querySelector('[name="size"]').value = p.size || '';
-    form.querySelector('[name="description"]').value = p.description || '';
+    form.querySelector('#productDescription').innerHTML = p.description || '';
+    form.querySelector('[name="shortDescription"]').value = p.shortDescription || '';
+    form.querySelector('#productTechnicalSpecs').innerHTML = p.technicalSpecs || '';
     form.querySelector('[name="brand"]').value = p.brand || '';
     selectedProductImages = p.images && p.images.length ? [...p.images] : (p.image ? [p.image] : []);
     productAttributes = Array.isArray(p.attributes) ? p.attributes.map(attribute => ({ name: attribute.name || '', values: [...(attribute.values || [])] })) : [];
@@ -479,18 +569,36 @@ function renderImagePreviews() {
   preview.querySelectorAll('[data-remove-image]').forEach(button => {
     button.addEventListener('click', () => {
       selectedProductImages.splice(Number(button.dataset.removeImage), 1);
+      productImagesChanged = true;
       renderImagePreviews();
     });
   });
 }
 
-function readImageFiles(files) {
-  return Promise.all([...files].map(file => new Promise((resolve, reject) => {
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const maxSize = 1600;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      image.onerror = reject;
+      image.src = reader.result;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
-  })));
+  });
+}
+
+function readImageFiles(files) {
+  return Promise.all([...files].map(compressImage));
 }
 
 function generateVariants(attributes, previousVariants = []) {
@@ -626,10 +734,18 @@ function bindVariantTable() {
 function bindAdminProductForm() {
   const form = document.getElementById('productForm');
   if (!form) return;
+  document.querySelectorAll('.rich-editor').forEach(editor => editor.addEventListener('paste', async event => {
+    const imageFiles = [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith('image/'));
+    if (!imageFiles.length) return;
+    event.preventDefault();
+    const images = await Promise.all(imageFiles.map(compressImage));
+    images.forEach(image => document.execCommand('insertHTML', false, `<img src="${image}" alt="Ảnh sản phẩm">`));
+  }));
   const imageInput = document.getElementById('productImages');
   if (imageInput) imageInput.addEventListener('change', async event => {
     try {
       selectedProductImages = await readImageFiles(event.target.files);
+      productImagesChanged = true;
       renderImagePreviews();
     } catch (error) {
       alert('Không thể đọc ảnh đã chọn');
@@ -664,10 +780,12 @@ async function saveProductFromForm(e) {
     oldPrice: Number(form.querySelector('[name="oldPrice"]').value) || productVariants.find(variant => variant.active !== false)?.oldPrice || 0,
     badge: form.querySelector('[name="badge"]').value.trim(),
     image: form.querySelector('[name="image"]').value.trim(),
-    images: selectedProductImages.length ? [...selectedProductImages] : [],
+    ...(productImagesChanged || !id ? { images: selectedProductImages.length ? [...selectedProductImages] : [] } : {}),
     material: form.querySelector('[name="material"]').value.trim(),
     size: form.querySelector('[name="size"]').value.trim(),
-    description: form.querySelector('[name="description"]').value.trim(),
+    description: form.querySelector('#productDescription').innerHTML.trim(),
+    shortDescription: form.querySelector('[name="shortDescription"]').value.trim(),
+    technicalSpecs: form.querySelector('#productTechnicalSpecs').innerHTML.trim(),
     brand: form.querySelector('[name="brand"]').value.trim() || 'Nệm Văn Thanh'
     ,attributes: productAttributes.filter(attribute => attribute.name && attribute.values.length)
     ,variants: productVariants
@@ -683,10 +801,10 @@ async function saveProductFromForm(e) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 120000);
     const response = await fetch(id ? `/api/products/${id}` : '/api/products', {
       method: id ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(data),
       signal: controller.signal
     });
@@ -734,7 +852,7 @@ async function deleteProduct(id) {
     });
   }
   try {
-    const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+    const response = await fetch(`/api/products/${id}`, { method: 'DELETE', headers: authHeaders() });
     if (!response.ok) throw new Error('Không thể xóa sản phẩm');
     products = products.filter(p => String(p.id) !== String(id));
   } catch (error) {
@@ -784,7 +902,7 @@ function renderProductDetail() {
       <div class="detail-box">
         <span class="eyebrow">${product.category}</span>
         <h1>${product.name}</h1>
-        <p class="detail-summary">${product.description || 'Thiết kế êm ái, nâng đỡ cơ thể và mang lại cảm giác thư giãn trọn vẹn cho giấc ngủ mỗi ngày.'}</p>
+        <div class="detail-summary">${product.shortDescription || 'Thiết kế êm ái, nâng đỡ cơ thể và mang lại cảm giác thư giãn trọn vẹn cho giấc ngủ mỗi ngày.'}</div>
         <div class="detail-rating">Đánh giá ${product.rating || 5} <span>•</span> ${product.reviews || 0} nhận xét</div>
         <div class="detail-price">
           <span class="price" id="detailPrice">${formatMoney(firstVariant.price)}</span>
@@ -809,13 +927,14 @@ function renderProductDetail() {
       <div class="detail-description">
         <span class="eyebrow">Thông tin sản phẩm</span>
         <h2>Thoải mái hơn trong từng chuyển động</h2>
-        <p>${product.description || 'Sản phẩm được hoàn thiện từ vật liệu chọn lọc, cân bằng giữa độ êm và khả năng nâng đỡ. Bề mặt thoáng khí giúp duy trì cảm giác dễ chịu trong suốt thời gian nghỉ ngơi.'}</p>
+        <div class="rich-content">${product.description || 'Sản phẩm được hoàn thiện từ vật liệu chọn lọc, cân bằng giữa độ êm và khả năng nâng đỡ. Bề mặt thoáng khí giúp duy trì cảm giác dễ chịu trong suốt thời gian nghỉ ngơi.'}</div>
       </div>
       <div class="detail-specs">
         <div><span>Thương hiệu</span><strong>${product.brand || 'Nệm Văn Thanh'}</strong></div>
         <div><span>Chất liệu</span><strong>${product.material || 'Đang cập nhật'}</strong></div>
         <div><span>Kích thước</span><strong>${product.size || 'Đang cập nhật'}</strong></div>
         <div><span>Tình trạng</span><strong>Còn hàng</strong></div>
+        <div class="technical-specs"><span>Thông số kỹ thuật</span><div class="rich-content">${product.technicalSpecs || 'Đang cập nhật'}</div></div>
       </div>
     </section>
     <section class="related-products">
@@ -899,10 +1018,108 @@ function bindSearchAndFilters() {
 function bindCheckoutForm() {
   const form = document.getElementById("checkoutForm");
   if (!form) return;
-  form.addEventListener("submit", event => {
+  form.addEventListener("submit", async event => {
     event.preventDefault();
-    alert("Đặt hàng thành công! Chúng tôi sẽ xác nhận qua email/SMS trong thời gian sớm nhất.");
+    const values = Object.fromEntries(new FormData(form));
+    const items = cart.map(item => {
+      const product = products.find(product => String(product.id) === String(item.id));
+      return { productId: product?._id || product?.id, qty: item.qty, price: product?.price || 0 };
+    }).filter(item => item.productId);
+    if (!items.length) return alert('Giỏ hàng đang trống.');
+    const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+    try {
+      const response = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ customer: { name: values.name, phone: values.phone, email: values.email, address: values.address, city: values.city }, items, total, paymentMethod: values.paymentMethod, note: values.note, userId: JSON.parse(localStorage.getItem('nvtUser') || 'null')?.id }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Không thể tạo đơn');
+      localStorage.setItem('nvtLastOrder', JSON.stringify(result.order));
+      if (result.token) {
+        localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+        localStorage.setItem('nvtUser', JSON.stringify({ id: result.order.userId, name: values.name, email: values.email, role: 'customer' }));
+      }
+      cart = [];
+      localStorage.setItem(PRODUCT_STORAGE_KEY, '[]');
+      updateCartBadge();
+      alert(result.accountCreated ? 'Đặt hàng thành công. Tài khoản khách hàng đã được tạo, chờ xác nhận đơn.' : 'Đặt hàng thành công. Đơn hàng đang chờ xác nhận.');
+      window.location.href = 'tai-khoan.html';
+    } catch (error) { alert(`Không thể đặt hàng: ${error.message}`); }
   });
+}
+
+function bindAccountForms() {
+  const login = document.getElementById('loginPanel');
+  const register = document.getElementById('registerPanel');
+  login?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(login));
+    const response = await fetch('/api/users/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    const result = await response.json();
+    if (!response.ok) return alert(result.error || 'Đăng nhập thất bại');
+    const tokenKey = ['admin', 'manager'].includes(result.user.role) ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
+    localStorage.setItem(tokenKey, result.token); localStorage.setItem('nvtUser', JSON.stringify(result.user));
+    window.location.href = result.user.role === 'admin' || result.user.role === 'manager' ? 'admin.html' : 'index.html';
+  });
+  register?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(register));
+    const response = await fetch('/api/users/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    const result = await response.json();
+    if (!response.ok) return alert(result.error || 'Đăng ký thất bại');
+    localStorage.setItem(CUSTOMER_AUTH_TOKEN_KEY, result.token); localStorage.setItem('nvtUser', JSON.stringify(result.user));
+    window.location.href = 'index.html';
+  });
+  const ordersPanel = document.getElementById('ordersPanel');
+  if (ordersPanel && getAuthToken()) {
+    fetch('/api/orders', { headers: authHeaders() }).then(response => response.ok ? response.json() : []).then(orders => {
+      ordersPanel.innerHTML = orders.length ? orders.map(order => `<div class="order-item"><div><strong>${order._id}</strong><br><small>${new Date(order.createdAt).toLocaleDateString('vi-VN')}</small></div><div class="status pending">${order.status}</div><strong>${formatMoney(order.total || 0)}</strong></div>`).join('') : '<p>Chưa có đơn hàng.</p>';
+    });
+  }
+}
+
+async function guardAdminPage() {
+  if (!document.getElementById('adminProducts')) return true;
+  const token = localStorage.getItem(ADMIN_AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    window.location.href = 'tai-khoan.html';
+    return false;
+  }
+  const response = await fetch('/api/users/me', { headers: authHeaders() });
+  if (!response.ok) {
+    localStorage.removeItem(ADMIN_AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.location.href = 'tai-khoan.html';
+    return false;
+  }
+  const user = await response.json();
+  if (!['admin', 'manager'].includes(user.role)) { alert('Bạn không có quyền truy cập khu vực quản trị.'); window.location.href = 'index.html'; return false; }
+  await renderAdminOrdersFromApi();
+  await renderAdminUsers();
+  return true;
+}
+
+async function renderAdminOrdersFromApi() {
+  const tbody = document.getElementById('adminOrders');
+  if (!tbody) return;
+  const response = await fetch('/api/orders', { headers: authHeaders() });
+  if (!response.ok) return;
+  const orders = await response.json();
+  tbody.innerHTML = orders.map(order => `<tr><td>${order._id}</td><td>${order.customer?.name || ''}<br>${order.customer?.phone || ''}</td><td>${formatMoney(order.total || 0)}</td><td><select data-order-status="${order._id}">${['pending', 'confirmed', 'shipping', 'completed', 'cancelled'].map(status => `<option value="${status}" ${status === order.status ? 'selected' : ''}>${status}</option>`).join('')}</select></td><td>${new Date(order.createdAt).toLocaleDateString('vi-VN')}</td></tr>`).join('');
+  tbody.querySelectorAll('[data-order-status]').forEach(select => select.addEventListener('change', async event => {
+    const response = await fetch(`/api/orders/${event.target.dataset.orderStatus}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ status: event.target.value }) });
+    showAdminToast(response.ok ? 'Đã cập nhật trạng thái đơn.' : 'Không thể cập nhật đơn.', response.ok ? 'success' : 'error');
+  }));
+}
+
+async function renderAdminUsers() {
+  const tbody = document.getElementById('adminUsers');
+  if (!tbody) return;
+  const response = await fetch('/api/users', { headers: authHeaders() });
+  if (!response.ok) return;
+  const users = await response.json();
+  tbody.innerHTML = users.map(user => `<tr><td>${user.name}</td><td>${user.email}</td><td>${user.role}</td><td>${user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN') : ''}</td><td>${user.role === 'customer' ? `<button class="btn-small" data-promote-user="${user._id}">Bổ nhiệm quản lý</button>` : ''}</td></tr>`).join('');
+  tbody.querySelectorAll('[data-promote-user]').forEach(button => button.addEventListener('click', async () => {
+    const response = await fetch(`/api/users/${button.dataset.promoteUser}/role`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ role: 'manager' }) });
+    if (response.ok) { showAdminToast('Đã bổ nhiệm quản lý.'); renderAdminUsers(); } else showAdminToast('Không thể bổ nhiệm quản lý.', 'error');
+  }));
 }
 
 function bindCartLinks() {
@@ -913,7 +1130,10 @@ function bindCartLinks() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // initialize products from storage first
+  const canViewPage = await guardAdminPage();
+  if (!canViewPage) return;
+  renderAuthState();
+  bindAccountForms();
   await initProductsStorage();
   updateCartBadge();
   bindSearchAndFilters();
@@ -925,6 +1145,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindCheckoutForm();
   bindCartLinks();
   bindAdminProductForm();
+  await setupCustomerAccount();
 
   if (document.getElementById("productGrid")) {
     renderHomeProducts();

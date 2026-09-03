@@ -58,23 +58,23 @@
                 <div class="form-grid">
                   <div class="field">
                     <label>Họ tên</label>
-                    <input type="text" placeholder="Nguyễn Văn A" required />
+                    <input name="name" type="text" placeholder="Nguyễn Văn A" required />
                   </div>
                   <div class="field">
                     <label>Số điện thoại</label>
-                    <input type="tel" placeholder="0909 123 456" required />
+                    <input name="phone" type="tel" placeholder="0909 123 456" required />
                   </div>
                   <div class="field full">
                     <label>Email</label>
-                    <input type="email" placeholder="example@email.com" />
+                    <input name="email" type="email" placeholder="example@email.com" />
                   </div>
                   <div class="field full">
                     <label>Địa chỉ</label>
-                    <input type="text" placeholder="Số nhà, đường, phường, quận" required />
+                    <input name="address" type="text" placeholder="Số nhà, đường, phường, quận" required />
                   </div>
                   <div class="field">
                     <label>Tỉnh / thành</label>
-                    <select>
+                    <select name="city">
                       <option>Hà Nội</option>
                       <option>Đà Nẵng</option>
                       <option>TP.HCM</option>
@@ -83,7 +83,7 @@
                   </div>
                   <div class="field">
                     <label>Phương thức thanh toán</label>
-                    <select>
+                    <select name="paymentMethod">
                       <option>COD</option>
                       <option>Chuyển khoản ngân hàng</option>
                       <option>Ví điện tử</option>
@@ -91,7 +91,7 @@
                   </div>
                   <div class="field full">
                     <label>Ghi chú</label>
-                    <textarea rows="4" placeholder="Ghi chú cho đơn hàng"></textarea>
+                    <textarea name="note" rows="4" placeholder="Ghi chú cho đơn hàng"></textarea>
                   </div>
                 </div>
 

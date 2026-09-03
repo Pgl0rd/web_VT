@@ -55,37 +55,48 @@
             <div class="tabs">
               <div class="tab active" data-tab="login">Đăng nhập</div>
               <div class="tab" data-tab="register">Đăng ký</div>
+              <div class="tab" data-tab="profile">Thông tin tài khoản</div>
               <div class="tab" data-tab="orders">Đơn hàng</div>
             </div>
 
             <div class="account-grid">
-              <div id="loginPanel">
+              <form id="profilePanel" class="hidden">
+                <h3>Thông tin tài khoản</h3>
+                <div class="field"><label>Họ tên</label><input name="name" type="text" required /></div>
+                <div class="field"><label>Email</label><input name="email" type="email" required /></div>
+                <div class="field"><label>Số điện thoại</label><input name="phone" type="tel" /></div>
+                <div class="field"><label>Địa chỉ</label><input name="address" type="text" /></div>
+                <button class="btn btn-primary" style="width:100%;" type="submit">Lưu thông tin</button>
+                <button class="btn btn-secondary" id="logoutBtn" style="width:100%; margin-top:8px;" type="button">Đăng xuất</button>
+                <p id="profileMessage" class="form-message"></p>
+              </form>
+              <form id="loginPanel" method="post">
                 <div class="field">
                   <label>Email</label>
-                  <input type="email" placeholder="example@email.com" />
+                  <input name="email" type="email" placeholder="example@email.com" required />
                 </div>
                 <div class="field">
                   <label>Mật khẩu</label>
-                  <input type="password" placeholder="••••••••" />
+                  <input name="password" type="password" placeholder="••••••••" required />
                 </div>
-                <button class="btn btn-primary" style="width:100%;">Đăng nhập</button>
-              </div>
+                <button class="btn btn-primary" style="width:100%;" type="submit">Đăng nhập</button>
+              </form>
 
-              <div id="registerPanel" class="hidden">
+              <form id="registerPanel" class="hidden" method="post">
                 <div class="field">
                   <label>Họ tên</label>
-                  <input type="text" placeholder="Nguyễn Văn A" />
+                  <input name="name" type="text" placeholder="Nguyễn Văn A" required />
                 </div>
                 <div class="field">
                   <label>Email</label>
-                  <input type="email" placeholder="example@email.com" />
+                  <input name="email" type="email" placeholder="example@email.com" required />
                 </div>
                 <div class="field">
                   <label>Mật khẩu</label>
-                  <input type="password" placeholder="••••••••" />
+                  <input name="password" type="password" placeholder="••••••••" required />
                 </div>
-                <button class="btn btn-primary" style="width:100%;">Tạo tài khoản</button>
-              </div>
+                <button class="btn btn-primary" style="width:100%;" type="submit">Tạo tài khoản</button>
+              </form>
 
               <div id="ordersPanel" class="hidden">
                 <div class="order-item">

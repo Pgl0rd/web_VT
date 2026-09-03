@@ -8,7 +8,7 @@ async function connect(uri) {
     _connected = false;
     return;
   }
-  await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+  await mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 8000, socketTimeoutMS: 10000 });
   _connected = true;
   console.log('MongoDB connected');
 }

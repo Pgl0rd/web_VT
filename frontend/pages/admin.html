@@ -95,7 +95,9 @@
                 <div class="field field-wide"><label for="productImage">Ảnh đại diện (URL, tùy chọn)</label><input id="productImage" name="image" type="url" placeholder="https://..." /></div>
                 <div class="field field-wide"><label for="productImages">Tải nhiều ảnh</label><input id="productImages" name="images" type="file" accept="image/*" multiple /><small>Chọn nhiều ảnh cùng lúc. Ảnh đầu tiên sẽ làm ảnh đại diện.</small><div id="imagePreview" class="image-preview"></div></div>
                 <div class="field field-wide"><label>Thuộc tính và biến thể</label><small>Thêm nhóm thuộc tính như Độ dày, Khổ rộng hoặc Chất liệu. Nhập giá trị rồi nhấn Enter, hệ thống sẽ tự sinh mọi tổ hợp.</small><div id="attributeBuilder" class="attribute-builder"></div><button class="btn btn-secondary variant-add" id="addAttributeBtn" type="button">+ Thêm thuộc tính</button><div id="variantTable" class="variant-table-wrap"></div></div>
-                <div class="field field-wide"><label for="productDescription">Mô tả</label><textarea id="productDescription" name="description" rows="4"></textarea></div>
+                <div class="field field-wide"><label for="productDescription">Mô tả chi tiết</label><div id="productDescription" class="rich-editor" contenteditable="true" data-placeholder="Nhập hoặc dán mô tả, hình ảnh vào đây..."></div><small>Có thể dán chữ và ảnh trực tiếp từ clipboard.</small></div>
+                <div class="field field-wide"><label for="productShortDescription">Mô tả ngắn bên cạnh ảnh</label><textarea id="productShortDescription" name="shortDescription" rows="3" placeholder="Tóm tắt nổi bật của sản phẩm"></textarea></div>
+                <div class="field field-wide"><label for="productTechnicalSpecs">Thông số kỹ thuật</label><div id="productTechnicalSpecs" class="rich-editor" contenteditable="true" data-placeholder="Dán bảng hoặc nhập thông số kỹ thuật tại đây..."></div><small>Có thể dán văn bản, bảng và hình ảnh trực tiếp từ clipboard.</small></div>
               </div>
               <div class="modal-footer">
                 <button class="btn btn-secondary" type="button" data-close-product-form>Hủy</button>
@@ -137,6 +139,8 @@
               <tbody id="adminOrders"></tbody>
             </table>
           </div>
+          <div class="admin-section-head admin-secondary-head"><div><span class="eyebrow">Tài khoản</span><h3>Phân quyền người dùng</h3></div></div>
+          <div class="admin-table"><table><thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Ngày tạo</th><th></th></tr></thead><tbody id="adminUsers"></tbody></table></div>
         </div>
       </section>
     </main>
