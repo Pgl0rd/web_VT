@@ -6,7 +6,7 @@ const store = require('../data/store');
 exports.list = async (req, res) => {
   try {
     if (db.connected()) {
-      const products = await Product.find().limit(100).lean();
+      const products = await Product.find().select('-images').limit(100).lean();
       return res.json(products);
     }
     const products = await store.list();

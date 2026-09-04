@@ -497,7 +497,7 @@ function showAdminToast(message, type = 'success') {
   requestAnimationFrame(() => toast.classList.add('visible'));
 }
 
-function openProductForm(id) {
+async function openProductForm(id) {
   const form = document.getElementById('productForm');
   if (!form) return;
   form.reset();
@@ -512,8 +512,16 @@ function openProductForm(id) {
   renderImagePreviews();
   renderVariantModule();
   if (id) {
-    const p = products.find(x => String(x.id) === String(id));
+    let p = products.find(x => String(x.id) === String(id));
     if (!p) return alert('Sản phẩm không tồn tại');
+    if (!p.images?.length) {
+      try {
+        const response = await fetch(`/api/products/${id}`);
+        if (response.ok) p = normalizeProduct(await response.json());
+      } catch (error) {
+        return alert('Không thể tải đầy đủ thông tin sản phẩm');
+      }
+    }
     form.dataset.editId = id;
     form.querySelector('[name="name"]').value = p.name || '';
     form.querySelector('[name="category"]').value = p.category || '';
@@ -575,6 +583,38 @@ function renderImagePreviews() {
   });
 }
 
+function removeEdgeBlackBackground(context, width, height) {
+  const imageData = context.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+  const visited = new Uint8Array(width * height);
+  const queue = [];
+  const isBackground = index => {
+    const alpha = pixels[index + 3];
+    return alpha > 0 && pixels[index] < 55 && pixels[index + 1] < 55 && pixels[index + 2] < 55;
+  };
+  const add = (x, y) => {
+    const position = y * width + x;
+    if (visited[position]) return;
+    const index = position * 4;
+    if (!isBackground(index)) return;
+    visited[position] = 1;
+    queue.push(position);
+  };
+  for (let x = 0; x < width; x += 1) { add(x, 0); add(x, height - 1); }
+  for (let y = 1; y < height - 1; y += 1) { add(0, y); add(width - 1, y); }
+  while (queue.length) {
+    const position = queue.pop();
+    const x = position % width;
+    const y = Math.floor(position / width);
+    pixels[position * 4 + 3] = 0;
+    if (x > 0) add(x - 1, y);
+    if (x < width - 1) add(x + 1, y);
+    if (y > 0) add(x, y - 1);
+    if (y < height - 1) add(x, y + 1);
+  }
+  context.putImageData(imageData, 0, 0);
+}
+
 function compressImage(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -586,8 +626,18 @@ function compressImage(file) {
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(image.width * scale));
         canvas.height = Math.max(1, Math.round(image.height * scale));
-        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.78));
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const cornerPixels = [
+          context.getImageData(0, 0, 1, 1).data,
+          context.getImageData(canvas.width - 1, 0, 1, 1).data,
+          context.getImageData(0, canvas.height - 1, 1, 1).data,
+          context.getImageData(canvas.width - 1, canvas.height - 1, 1, 1).data
+        ];
+        const hasBlackCorners = cornerPixels.every(pixel => pixel[3] > 0 && pixel[0] < 55 && pixel[1] < 55 && pixel[2] < 55);
+        if (hasBlackCorners) removeEdgeBlackBackground(context, canvas.width, canvas.height);
+        const hasTransparency = file.type === 'image/png' || file.type === 'image/webp' || hasBlackCorners;
+        resolve(hasTransparency ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.78));
       };
       image.onerror = reject;
       image.src = reader.result;
@@ -869,13 +919,22 @@ async function deleteProduct(id) {
   showAdminToast('Đã xóa sản phẩm khỏi MongoDB.');
 }
 
-function renderProductDetail() {
+async function renderProductDetail() {
   const root = document.getElementById("productDetail");
   if (!root) return;
 
   const params = new URLSearchParams(window.location.search);
   const productId = params.get("id") || "1";
-  const product = products.find(item => String(item.id) === String(productId)) || products[0];
+  let product = products.find(item => String(item.id) === String(productId)) || products[0];
+  if (!product) return;
+  if (!product.images?.length || product.images.length < 2) {
+    try {
+      const response = await fetch(`/api/products/${productId}`);
+      if (response.ok) product = normalizeProduct(await response.json());
+    } catch (error) {
+      console.warn('Could not load product gallery', error);
+    }
+  }
   const productImages = product.images && product.images.length ? product.images : [product.image];
   const discountAmount = Math.max(0, (product.oldPrice || 0) - product.price);
   const discountPercent = product.oldPrice ? Math.round((discountAmount / product.oldPrice) * 100) : 0;
@@ -1140,7 +1199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAccountTabs();
   renderAdminOrders();
   renderAdminProducts();
-  renderProductDetail();
+  await renderProductDetail();
   renderCartPage();
   bindCheckoutForm();
   bindCartLinks();
