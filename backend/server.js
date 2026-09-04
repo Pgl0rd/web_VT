@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const productRoutes = require('./routes/products');
+const categoryRoutes = require('./routes/categories');
 const userRoutes = require('./routes/users');
 const orderRoutes = require('./routes/orders');
 const db = require('./config/database');
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '30mb' }));
 
 // API
 app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
 

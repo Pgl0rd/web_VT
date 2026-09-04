@@ -127,6 +127,7 @@ function getAuthToken() {
 const authHeaders = () => getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {};
 let selectedProductImages = [];
 let productImagesChanged = false;
+let categories = [];
 let productAttributes = [];
 let productVariants = [];
 let removedVariantNames = new Set();
@@ -160,6 +161,53 @@ async function initProductsStorage() {
     console.error('Failed to init products storage', e);
     products = [];
   }
+}
+
+async function initCategories() {
+  try {
+    const response = await fetch('/api/categories');
+    if (!response.ok) throw new Error('Categories API unavailable');
+    categories = await response.json();
+    const options = categories.map(category => `<option value="${category.name}">${category.name}</option>`).join('');
+    const productCategory = document.getElementById('productCategory');
+    if (productCategory) productCategory.innerHTML = `<option value="">Chọn danh mục</option>${options}`;
+    const categoryFilter = document.getElementById('categoryFilter');
+    if (categoryFilter) {
+      const selected = categoryFilter.value;
+      categoryFilter.innerHTML = `<option value="all">Tất cả danh mục</option>${options}`;
+      categoryFilter.value = categories.some(category => category.name === selected) ? selected : 'all';
+    }
+    renderAdminCategories();
+  } catch (error) {
+    console.error('Failed to init categories', error);
+  }
+}
+
+function renderAdminCategories() {
+  const container = document.getElementById('adminCategories');
+  if (!container) return;
+  container.innerHTML = categories.length ? categories.map(category => `<div class="category-manager-item"><span><strong>${category.name}</strong><small>${category.productCount || 0} sản phẩm${category.legacy ? ' · danh mục cũ' : ''}</small></span>${category.legacy ? '<small>Được tạo từ sản phẩm hiện có</small>' : `<button class="btn-small" type="button" data-delete-category="${category._id}">Xóa</button>`}</div>`).join('') : '<p class="empty-state">Chưa có danh mục.</p>';
+  container.querySelectorAll('[data-delete-category]').forEach(button => button.addEventListener('click', async () => {
+    if (!confirm('Xóa danh mục này?')) return;
+    const response = await fetch(`/api/categories/${button.dataset.deleteCategory}`, { method: 'DELETE', headers: authHeaders() });
+    const result = await response.json();
+    if (!response.ok) return showAdminToast(result.error || 'Không thể xóa danh mục.', 'error');
+    await initCategories();
+    showAdminToast('Đã xóa danh mục.');
+  }));
+}
+
+function bindCategoryForm() {
+  document.getElementById('categoryForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const response = await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ name: form.name.value }) });
+    const result = await response.json();
+    if (!response.ok) return showAdminToast(result.error || 'Không thể thêm danh mục.', 'error');
+    form.reset();
+    await initCategories();
+    showAdminToast('Đã thêm danh mục.');
+  });
 }
 
 function persistProducts() {
@@ -504,6 +552,7 @@ async function openProductForm(id) {
   form.dataset.editId = '';
   selectedProductImages = [];
   productImagesChanged = false;
+  form.querySelector('#productCategory').innerHTML = `<option value="">Chọn danh mục</option>${categories.map(category => `<option value="${category.name}">${category.name}</option>`).join('')}`;
   productAttributes = [];
   productVariants = [];
   removedVariantNames = new Set();
@@ -1193,6 +1242,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!canViewPage) return;
   renderAuthState();
   bindAccountForms();
+  bindCategoryForm();
+  await initCategories();
   await initProductsStorage();
   updateCartBadge();
   bindSearchAndFilters();
