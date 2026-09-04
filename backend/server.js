@@ -40,8 +40,15 @@ async function ensureAdmin() {
   const exists = await User.findOne({ email });
   if (!exists) await User.create({ name: 'Administrator', email, password: await bcrypt.hash(password, 12), role: 'admin' });
 }
+// Cấp quyền cho Vercel truy cập vào app
+module.exports = app;
+
 (async function(){
   await db.connect(process.env.MONGO_URI);
   if (db.connected()) await ensureAdmin();
-  app.listen(PORT, () => console.log('Server running on port', PORT));
+  
+  // Chỉ chạy listen khi KHÔNG PHẢI trên Vercel (nghĩa là đang chạy local)
+  if (!process.env.VERCEL) {
+    app.listen(PORT, () => console.log('Server running on port', PORT));
+  }
 })();
