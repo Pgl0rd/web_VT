@@ -120,6 +120,7 @@ const PRODUCT_LIST_KEY = "nvtProducts";
 const AUTH_TOKEN_KEY = 'nvtAuthToken';
 const ADMIN_AUTH_TOKEN_KEY = 'nvtAdminAuthToken';
 const CUSTOMER_AUTH_TOKEN_KEY = 'nvtCustomerAuthToken';
+const pageUrl = page => (location.pathname === '/' || location.pathname.endsWith('/index.html') ? `pages/${page}` : page);
 function getAuthToken() {
   const key = document.getElementById('adminProducts') ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
   return localStorage.getItem(key) || localStorage.getItem(AUTH_TOKEN_KEY);
@@ -317,7 +318,7 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
 
   document.querySelectorAll("[data-view-product]").forEach(btn => {
     btn.addEventListener("click", () => {
-      window.location.href = `chi-tiet-san-pham.html?id=${btn.dataset.viewProduct}`;
+      window.location.href = `${pageUrl('chi-tiet-san-pham.html')}?id=${btn.dataset.viewProduct}`;
     });
   });
 }
@@ -410,7 +411,7 @@ function setupAccountTabs() {
 
 function renderAuthState() {
   const user = JSON.parse(localStorage.getItem('nvtUser') || 'null');
-  document.querySelectorAll('.nav-actions a[href="tai-khoan.html"]').forEach(link => {
+  document.querySelectorAll('.nav-actions a[href$="tai-khoan.html"]').forEach(link => {
     if (user && user.role === 'customer') {
       link.textContent = user.name || 'Tài khoản';
       link.classList.add('account-link');
@@ -422,7 +423,7 @@ function renderAuthState() {
       wrapper.appendChild(link);
       const menu = document.createElement('div');
       menu.className = 'account-menu hidden';
-      menu.innerHTML = '<a href="tai-khoan.html#profile">Thông tin tài khoản</a><a href="tai-khoan.html#orders">Đơn hàng</a><button type="button" data-account-logout>Đăng xuất</button>';
+      menu.innerHTML = `<a href="${pageUrl('tai-khoan.html')}#profile">Thông tin tài khoản</a><a href="${pageUrl('tai-khoan.html')}#orders">Đơn hàng</a><button type="button" data-account-logout>Đăng xuất</button>`;
       wrapper.appendChild(menu);
       link.addEventListener('click', event => {
         event.preventDefault();
@@ -431,7 +432,7 @@ function renderAuthState() {
       menu.querySelector('[data-account-logout]').addEventListener('click', () => {
         localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
         localStorage.removeItem('nvtUser');
-        window.location.href = 'index.html';
+        window.location.href = pageUrl('index.html');
       });
     }
   });
@@ -469,7 +470,7 @@ async function setupCustomerAccount() {
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
     localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
     localStorage.removeItem('nvtUser');
-    window.location.href = 'index.html';
+    window.location.href = pageUrl('index.html');
   });
 }
 
@@ -1083,7 +1084,7 @@ async function renderProductDetail() {
   document.getElementById("addDetailCart")?.addEventListener("click", addSelectedProduct);
   document.getElementById("buyNowBtn")?.addEventListener("click", () => {
     addSelectedProduct();
-    window.location.href = 'thanh-toan.html';
+    window.location.href = pageUrl('thanh-toan.html');
   });
 
   const updateSelectedVariant = () => {
@@ -1102,7 +1103,7 @@ async function renderProductDetail() {
   document.querySelectorAll('[data-detail-attribute]').forEach(select => select.addEventListener('change', updateSelectedVariant));
   document.querySelectorAll('[data-related-add]').forEach(btn => btn.addEventListener('click', () => addToCart(btn.dataset.relatedAdd)));
   document.querySelectorAll('[data-related-view]').forEach(btn => btn.addEventListener('click', () => {
-    window.location.href = `chi-tiet-san-pham.html?id=${btn.dataset.relatedView}`;
+    window.location.href = `${pageUrl('chi-tiet-san-pham.html')}?id=${btn.dataset.relatedView}`;
   }));
 }
 
@@ -1148,7 +1149,7 @@ function bindCheckoutForm() {
       localStorage.setItem(PRODUCT_STORAGE_KEY, '[]');
       updateCartBadge();
       alert(result.accountCreated ? 'Đặt hàng thành công. Tài khoản khách hàng đã được tạo, chờ xác nhận đơn.' : 'Đặt hàng thành công. Đơn hàng đang chờ xác nhận.');
-      window.location.href = 'tai-khoan.html';
+      window.location.href = pageUrl('tai-khoan.html');
     } catch (error) { alert(`Không thể đặt hàng: ${error.message}`); }
   });
 }
@@ -1164,7 +1165,7 @@ function bindAccountForms() {
     if (!response.ok) return alert(result.error || 'Đăng nhập thất bại');
     const tokenKey = ['admin', 'manager'].includes(result.user.role) ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
     localStorage.setItem(tokenKey, result.token); localStorage.setItem('nvtUser', JSON.stringify(result.user));
-    window.location.href = result.user.role === 'admin' || result.user.role === 'manager' ? 'admin.html' : 'index.html';
+    window.location.href = result.user.role === 'admin' || result.user.role === 'manager' ? pageUrl('admin.html') : pageUrl('index.html');
   });
   register?.addEventListener('submit', async event => {
     event.preventDefault();
@@ -1173,7 +1174,7 @@ function bindAccountForms() {
     const result = await response.json();
     if (!response.ok) return alert(result.error || 'Đăng ký thất bại');
     localStorage.setItem(CUSTOMER_AUTH_TOKEN_KEY, result.token); localStorage.setItem('nvtUser', JSON.stringify(result.user));
-    window.location.href = 'index.html';
+    window.location.href = pageUrl('index.html');
   });
   const ordersPanel = document.getElementById('ordersPanel');
   if (ordersPanel && getAuthToken()) {
@@ -1187,18 +1188,18 @@ async function guardAdminPage() {
   if (!document.getElementById('adminProducts')) return true;
   const token = localStorage.getItem(ADMIN_AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
   if (!token) {
-    window.location.href = 'tai-khoan.html';
+    window.location.href = pageUrl('tai-khoan.html');
     return false;
   }
   const response = await fetch('/api/users/me', { headers: authHeaders() });
   if (!response.ok) {
     localStorage.removeItem(ADMIN_AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
-    window.location.href = 'tai-khoan.html';
+    window.location.href = pageUrl('tai-khoan.html');
     return false;
   }
   const user = await response.json();
-  if (!['admin', 'manager'].includes(user.role)) { alert('Bạn không có quyền truy cập khu vực quản trị.'); window.location.href = 'index.html'; return false; }
+  if (!['admin', 'manager'].includes(user.role)) { alert('Bạn không có quyền truy cập khu vực quản trị.'); window.location.href = pageUrl('index.html'); return false; }
   await renderAdminOrdersFromApi();
   await renderAdminUsers();
   return true;
@@ -1233,7 +1234,7 @@ async function renderAdminUsers() {
 function bindCartLinks() {
   const cartLinks = document.querySelectorAll("[data-cart-link]");
   cartLinks.forEach(link => {
-    link.addEventListener("click", () => window.location.href = "gio-hang.html");
+    link.addEventListener("click", () => window.location.href = pageUrl('gio-hang.html'));
   });
 }
 
@@ -1262,5 +1263,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   const homeBtn = document.querySelector("[data-home]");
-  if (homeBtn) homeBtn.addEventListener("click", () => window.location.href = "index.html");
+  if (homeBtn) homeBtn.addEventListener("click", () => window.location.href = pageUrl('index.html'));
 });

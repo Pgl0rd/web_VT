@@ -20,11 +20,13 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
 
+app.get('/pages/index.html', (req, res) => res.redirect('/index.html'));
+
 // Serve page files at the site root because navigation uses paths such as /san-pham.html.
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'pages')));
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'frontend', 'pages', 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
 });
 
 app.use(errorHandler);
