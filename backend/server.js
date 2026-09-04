@@ -14,6 +14,18 @@ const bcrypt = require('bcryptjs');
 const app = express();
 app.use(express.json({ limit: '30mb' }));
 
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (process.env.VERCEL && !process.env.MONGO_URI) return res.status(503).json({ error: 'MONGO_URI is not configured on Vercel' });
+  try {
+    await db.connect(process.env.MONGO_URI);
+    next();
+  } catch (error) {
+    console.error('Database connection failed:', error.message);
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+});
+
 // API
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
@@ -21,6 +33,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
 
 app.get('/pages/index.html', (req, res) => res.redirect('/index.html'));
+app.get('/api/health', (req, res) => res.json({ ok: true, database: db.connected() ? 'connected' : 'fallback', mongoConfigured: Boolean(process.env.MONGO_URI) }));
 
 // Serve page files at the site root because navigation uses paths such as /san-pham.html.
 app.use(express.static(path.join(__dirname, '..', 'frontend', 'pages')));
@@ -32,7 +45,6 @@ app.get('*', (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
-app.get('/api/health', (req, res) => res.json({ ok: true, database: db.connected() ? 'connected' : 'fallback' }));
 async function ensureAdmin() {
   const email = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD || '';
