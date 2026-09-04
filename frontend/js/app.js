@@ -241,19 +241,19 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
   grid.innerHTML = filtered.map(product => `
     <article class="product-card">
       <div class="product-media">
-        <span class="badge">${product.badge}</span>
+        <span class="badge">${product.badge || 'Mới'}</span>
         <button class="wishlist" type="button">Yêu thích</button>
         <img src="${product.image}" alt="${product.name}">
       </div>
       <div class="product-body">
         <div class="product-meta">
           <span>${product.category}</span>
-          <span class="rating">Đánh giá ${product.rating}</span>
+          <span class="rating">Đánh giá ${product.rating || 5}</span>
         </div>
         <h3 class="product-name">${product.name}</h3>
         <div class="price-row">
           <span class="price">${formatMoney(product.price)}</span>
-          <span class="old-price">${formatMoney(product.oldPrice)}</span>
+          <span class="old-price">${product.oldPrice ? formatMoney(product.oldPrice) : ''}</span>
         </div>
         <div class="product-actions">
           <button class="btn btn-primary" data-add-cart="${product.id}">Thêm vào giỏ</button>
