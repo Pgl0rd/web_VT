@@ -109,6 +109,12 @@ button:disabled { cursor: wait; opacity: .6; }
   font-weight: 600;
 }
 .main-nav a:hover { color: var(--primary); }
+.nav-category-menu { position: relative; height: 100%; display: flex; align-items: center; }
+.nav-category-dropdown { position: absolute; top: calc(100% - 4px); left: 50%; z-index: 100; display: grid; min-width: 210px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transform: translate(-50%, -6px); transition: opacity .2s ease, transform .2s ease; }
+.nav-category-menu:hover .nav-category-dropdown, .nav-category-menu:focus-within .nav-category-dropdown { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.nav-category-dropdown a { display: flex; justify-content: space-between; gap: 20px; padding: 9px 10px; border-radius: 6px; color: var(--text); font-size: 13px; white-space: nowrap; }
+.nav-category-dropdown a:hover { background: var(--secondary); color: var(--primary); }
+.nav-category-dropdown small { color: var(--muted); }
 .nav-actions {
   display: flex;
   align-items: center;
@@ -222,6 +228,13 @@ main { min-height: calc(100vh - 160px); }
 .category-card, .feature-box, .admin-card, .form-card { padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); box-shadow: 0 8px 24px rgba(17,61,53,.06); }
 .category-card { transition: transform .2s ease, border-color .2s ease; }
 .category-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+.category-grid .category-card { display: flex; align-items: center; justify-content: space-between; min-height: 76px; text-decoration: none; }
+.category-grid .category-card span { color: var(--muted); font-size: 12px; }
+.category-grid .category-card { position: relative; overflow: hidden; isolation: isolate; padding: 0; background: var(--card); }
+.category-grid .category-card img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+.category-card-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(255,255,255,.96), rgba(255,255,255,.68)); }
+.category-card-content { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 22px; }
+.category-grid .category-card:has(img) h3 { color: var(--primary-dark); }
 .category-icon, .feature-icon { display: none; }
 .category-card h3, .feature-box h2, .feature-box h3 { margin: 0; color: var(--primary-dark); }
 .feature-box p { color: var(--muted); }
@@ -266,6 +279,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .category-manager-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .category-manager-item span { display: grid; gap: 2px; }
 .category-manager-item strong { color: var(--primary-dark); }
+.category-image-editor { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.category-image-preview { width: 72px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--secondary); }
+.category-image-editor input { flex: 1; padding: 7px; font-size: 12px; }
+.category-manager-item-expanded { display: block; }
+.category-manager-item[draggable="true"] { cursor: grab; }
+.category-manager-item.is-dragging { opacity: .5; }
+.category-drag-handle { display: inline-block; margin-right: 8px; color: var(--accent); font-weight: 800; letter-spacing: -2px; }
+.category-manager-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.category-product-picker { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.category-product-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.category-product-option { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text); font-size: 13px; }
+.category-product-option input { width: auto; }
 .admin-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
 table { width: 100%; border-collapse: collapse; min-width: 680px; }
 th, td { padding: 14px 16px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; }

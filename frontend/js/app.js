@@ -174,20 +174,98 @@ async function initCategories() {
     if (productCategory) productCategory.innerHTML = `<option value="">Chọn danh mục</option>${options}`;
     const categoryFilter = document.getElementById('categoryFilter');
     if (categoryFilter) {
-      const selected = categoryFilter.value;
+      const selected = new URLSearchParams(window.location.search).get('category') || categoryFilter.value;
       categoryFilter.innerHTML = `<option value="all">Tất cả danh mục</option>${options}`;
       categoryFilter.value = categories.some(category => category.name === selected) ? selected : 'all';
     }
+    renderFeaturedCategories();
+    renderCategoryNavigation();
     renderAdminCategories();
   } catch (error) {
     console.error('Failed to init categories', error);
   }
 }
 
+function categoryLink(categoryName) {
+  return `${pageUrl('san-pham.html')}?category=${encodeURIComponent(categoryName)}`;
+}
+
+function renderFeaturedCategories() {
+  const container = document.getElementById('featuredCategories');
+  if (!container) return;
+  container.innerHTML = categories.map(category => `<a class="category-card" href="${categoryLink(category.name)}"${category.image ? ` style="--category-image: url('${category.image}')"` : ''}><span class="category-card-shade"></span>${category.image ? `<img src="${category.image}" alt="${category.name}">` : ''}<span class="category-card-content"><h3>${category.name}</h3><span>${category.productCount || 0} sản phẩm</span></span></a>`).join('');
+}
+
+function renderCategoryNavigation() {
+  const productLink = document.querySelector('.main-nav a[href$="san-pham.html"]');
+  if (!productLink) return;
+  const existingWrapper = productLink.closest('.nav-category-menu');
+  if (existingWrapper) {
+    existingWrapper.querySelector('.nav-category-dropdown').innerHTML = categories.map(category => `<a href="${categoryLink(category.name)}">${category.name}<small>${category.productCount || 0}</small></a>`).join('');
+    return;
+  }
+  const wrapper = document.createElement('div');
+  wrapper.className = 'nav-category-menu';
+  productLink.parentNode.insertBefore(wrapper, productLink);
+  wrapper.appendChild(productLink);
+  const menu = document.createElement('div');
+  menu.className = 'nav-category-dropdown';
+  menu.innerHTML = categories.map(category => `<a href="${categoryLink(category.name)}">${category.name}<small>${category.productCount || 0}</small></a>`).join('');
+  wrapper.appendChild(menu);
+}
+
 function renderAdminCategories() {
   const container = document.getElementById('adminCategories');
   if (!container) return;
-  container.innerHTML = categories.length ? categories.map(category => `<div class="category-manager-item"><span><strong>${category.name}</strong><small>${category.productCount || 0} sản phẩm${category.legacy ? ' · danh mục cũ' : ''}</small></span>${category.legacy ? '<small>Được tạo từ sản phẩm hiện có</small>' : `<button class="btn-small" type="button" data-delete-category="${category._id}">Xóa</button>`}</div>`).join('') : '<p class="empty-state">Chưa có danh mục.</p>';
+  container.innerHTML = categories.length ? categories.map(category => {
+    const assigned = new Set(products.filter(product => product.category === category.name).map(product => String(product.id)));
+    const productOptions = products.length ? products.map(product => `<label class="category-product-option"><input type="checkbox" value="${product.id}" ${assigned.has(String(product.id)) ? 'checked' : ''}><span>${product.name}</span></label>`).join('') : '<small>Chưa có sản phẩm.</small>';
+    return `<div class="category-manager-item category-manager-item-expanded" draggable="true" data-category-id="${category._id}" data-category-name="${category.name}"><div class="category-manager-heading"><span><span class="category-drag-handle" title="Kéo để sắp xếp">::</span><strong>${category.name}</strong><small>${category.productCount || 0} sản phẩm</small></span><div>${`<button class="btn-small" type="button" data-delete-category="${category._id}">Xóa</button>`}</div></div><div class="category-image-editor"><img src="${category.image || ''}" alt="" class="category-image-preview ${category.image ? '' : 'hidden'}"><input type="file" accept="image/*" data-category-image><button class="btn-small" type="button" data-save-category-image="${category.name}">Lưu ảnh đại diện</button></div><div class="category-product-picker"><div class="category-product-list">${productOptions}</div><button class="btn btn-secondary" type="button" data-save-category="${category.name}">Lưu sản phẩm cho danh mục</button></div></div>`;
+  }).join('') : '<p class="empty-state">Chưa có danh mục.</p>';
+  let draggedCategory = null;
+  container.querySelectorAll('[data-category-id]').forEach(item => {
+    item.addEventListener('dragstart', () => { draggedCategory = item; item.classList.add('is-dragging'); });
+    item.addEventListener('dragend', async () => {
+      item.classList.remove('is-dragging');
+      const ids = [...container.querySelectorAll('[data-category-id]')].map(category => category.dataset.categoryId);
+      const response = await fetch('/api/categories/reorder', { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ ids }) });
+      if (!response.ok) showAdminToast('Không thể lưu thứ tự danh mục.', 'error');
+      draggedCategory = null;
+    });
+    item.addEventListener('dragover', event => {
+      event.preventDefault();
+      if (draggedCategory && draggedCategory !== item) {
+        const box = item.getBoundingClientRect();
+        item.parentNode.insertBefore(draggedCategory, event.clientY < box.top + box.height / 2 ? item : item.nextSibling);
+      }
+    });
+  });
+  container.querySelectorAll('[data-save-category]').forEach(button => button.addEventListener('click', async () => {
+    const item = button.closest('[data-category-name]');
+    const productIds = [...item.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+    button.disabled = true;
+    const response = await fetch(`/api/categories/by-name/${encodeURIComponent(button.dataset.saveCategory)}/products`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ productIds }) });
+    const result = await response.json();
+    button.disabled = false;
+    if (!response.ok) return showAdminToast(result.error || 'Không thể gán sản phẩm.', 'error');
+    await initProductsStorage();
+    await initCategories();
+    renderAdminProducts();
+    renderProductGrid();
+    showAdminToast('Đã cập nhật sản phẩm cho danh mục.');
+  }));
+  container.querySelectorAll('[data-save-category-image]').forEach(button => button.addEventListener('click', async () => {
+    const item = button.closest('[data-category-name]');
+    const input = item.querySelector('[data-category-image]');
+    if (!input.files[0]) return showAdminToast('Hãy chọn ảnh đại diện.', 'error');
+    button.disabled = true;
+    const response = await fetch(`/api/categories/by-name/${encodeURIComponent(button.dataset.saveCategoryImage)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ image: await compressImage(input.files[0]) }) });
+    const result = await response.json();
+    button.disabled = false;
+    if (!response.ok) return showAdminToast(result.error || 'Không thể lưu ảnh danh mục.', 'error');
+    await initCategories();
+    showAdminToast('Đã cập nhật ảnh đại diện danh mục.');
+  }));
   container.querySelectorAll('[data-delete-category]').forEach(button => button.addEventListener('click', async () => {
     if (!confirm('Xóa danh mục này?')) return;
     const response = await fetch(`/api/categories/${button.dataset.deleteCategory}`, { method: 'DELETE', headers: authHeaders() });
@@ -202,7 +280,8 @@ function bindCategoryForm() {
   document.getElementById('categoryForm')?.addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
-    const response = await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ name: form.name.value }) });
+    const image = form.image.files[0] ? await compressImage(form.image.files[0]) : '';
+    const response = await fetch('/api/categories', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ name: form.name.value, image }) });
     const result = await response.json();
     if (!response.ok) return showAdminToast(result.error || 'Không thể thêm danh mục.', 'error');
     form.reset();
@@ -1246,6 +1325,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   bindCategoryForm();
   await initCategories();
   await initProductsStorage();
+  renderAdminCategories();
   updateCartBadge();
   bindSearchAndFilters();
   setupAccountTabs();
