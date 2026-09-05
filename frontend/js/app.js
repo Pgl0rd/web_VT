@@ -120,10 +120,35 @@ const PRODUCT_LIST_KEY = "nvtProducts";
 const AUTH_TOKEN_KEY = 'nvtAuthToken';
 const ADMIN_AUTH_TOKEN_KEY = 'nvtAdminAuthToken';
 const CUSTOMER_AUTH_TOKEN_KEY = 'nvtCustomerAuthToken';
+const ADMIN_SESSION_STARTED_KEY = 'nvtAdminSessionStarted';
+const CUSTOMER_SESSION_STARTED_KEY = 'nvtCustomerSessionStarted';
 const pageUrl = page => (location.pathname === '/' || location.pathname.endsWith('/index.html') ? `pages/${page}` : page);
+function readValidToken(key) {
+  const token = localStorage.getItem(key);
+  if (!token) return null;
+  try {
+    const sessionKey = key === ADMIN_AUTH_TOKEN_KEY ? ADMIN_SESSION_STARTED_KEY : CUSTOMER_SESSION_STARTED_KEY;
+    const startedAt = Number(localStorage.getItem(sessionKey));
+    if (!startedAt || Date.now() - startedAt > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(key);
+      localStorage.removeItem(sessionKey);
+      return null;
+    }
+    const encodedPayload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(encodedPayload.padEnd(Math.ceil(encodedPayload.length / 4) * 4, '=')));
+    if (!payload.exp || payload.exp * 1000 <= Date.now()) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return token;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
 function getAuthToken() {
   const key = document.getElementById('adminProducts') ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
-  return localStorage.getItem(key) || localStorage.getItem(AUTH_TOKEN_KEY);
+  return readValidToken(key);
 }
 const authHeaders = () => getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {};
 let selectedProductImages = [];
@@ -510,6 +535,8 @@ function renderAuthState() {
       });
       menu.querySelector('[data-account-logout]').addEventListener('click', () => {
         localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
+        localStorage.removeItem(CUSTOMER_SESSION_STARTED_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
         localStorage.removeItem('nvtUser');
         window.location.href = pageUrl('index.html');
       });
@@ -520,7 +547,7 @@ function renderAuthState() {
 async function setupCustomerAccount() {
   const profile = document.getElementById('profilePanel');
   if (!profile) return;
-  const token = localStorage.getItem(CUSTOMER_AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = readValidToken(CUSTOMER_AUTH_TOKEN_KEY);
   if (!token) return;
   const response = await fetch('/api/users/me', { headers: authHeaders() });
   if (!response.ok) return;
@@ -548,6 +575,8 @@ async function setupCustomerAccount() {
   });
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
     localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
+    localStorage.removeItem(CUSTOMER_SESSION_STARTED_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem('nvtUser');
     window.location.href = pageUrl('index.html');
   });
@@ -1221,7 +1250,11 @@ function bindCheckoutForm() {
       if (!response.ok) throw new Error(result.error || 'Không thể tạo đơn');
       localStorage.setItem('nvtLastOrder', JSON.stringify(result.order));
       if (result.token) {
-        localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+        localStorage.setItem(CUSTOMER_AUTH_TOKEN_KEY, result.token);
+        localStorage.setItem(CUSTOMER_SESSION_STARTED_KEY, String(Date.now()));
+        localStorage.removeItem(ADMIN_AUTH_TOKEN_KEY);
+        localStorage.removeItem(ADMIN_SESSION_STARTED_KEY);
+        localStorage.removeItem(AUTH_TOKEN_KEY);
         localStorage.setItem('nvtUser', JSON.stringify({ id: result.order.userId, name: values.name, email: values.email, role: 'customer' }));
       }
       cart = [];
@@ -1242,8 +1275,13 @@ function bindAccountForms() {
     const response = await fetch('/api/users/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     const result = await response.json();
     if (!response.ok) return alert(result.error || 'Đăng nhập thất bại');
-    const tokenKey = ['admin', 'manager'].includes(result.user.role) ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
-    localStorage.setItem(tokenKey, result.token); localStorage.setItem('nvtUser', JSON.stringify(result.user));
+    const isAdmin = ['admin', 'manager'].includes(result.user.role);
+    const tokenKey = isAdmin ? ADMIN_AUTH_TOKEN_KEY : CUSTOMER_AUTH_TOKEN_KEY;
+    const sessionKey = isAdmin ? ADMIN_SESSION_STARTED_KEY : CUSTOMER_SESSION_STARTED_KEY;
+    localStorage.removeItem(isAdmin ? CUSTOMER_AUTH_TOKEN_KEY : ADMIN_AUTH_TOKEN_KEY);
+    localStorage.removeItem(isAdmin ? CUSTOMER_SESSION_STARTED_KEY : ADMIN_SESSION_STARTED_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.setItem(tokenKey, result.token); localStorage.setItem(sessionKey, String(Date.now())); localStorage.setItem('nvtUser', JSON.stringify(result.user));
     window.location.href = result.user.role === 'admin' || result.user.role === 'manager' ? pageUrl('admin.html') : pageUrl('index.html');
   });
   register?.addEventListener('submit', async event => {
@@ -1252,6 +1290,9 @@ function bindAccountForms() {
     const response = await fetch('/api/users/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     const result = await response.json();
     if (!response.ok) return alert(result.error || 'Đăng ký thất bại');
+    localStorage.removeItem(ADMIN_AUTH_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_SESSION_STARTED_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.setItem(CUSTOMER_AUTH_TOKEN_KEY, result.token); localStorage.setItem('nvtUser', JSON.stringify(result.user));
     window.location.href = pageUrl('index.html');
   });
@@ -1265,7 +1306,7 @@ function bindAccountForms() {
 
 async function guardAdminPage() {
   if (!document.getElementById('adminProducts')) return true;
-  const token = localStorage.getItem(ADMIN_AUTH_TOKEN_KEY) || localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = readValidToken(ADMIN_AUTH_TOKEN_KEY);
   if (!token) {
     window.location.href = pageUrl('tai-khoan.html');
     return false;
@@ -1273,6 +1314,8 @@ async function guardAdminPage() {
   const response = await fetch('/api/users/me', { headers: authHeaders() });
   if (!response.ok) {
     localStorage.removeItem(ADMIN_AUTH_TOKEN_KEY);
+    localStorage.removeItem(CUSTOMER_AUTH_TOKEN_KEY);
+    localStorage.removeItem(CUSTOMER_SESSION_STARTED_KEY);
     localStorage.removeItem(AUTH_TOKEN_KEY);
     window.location.href = pageUrl('tai-khoan.html');
     return false;

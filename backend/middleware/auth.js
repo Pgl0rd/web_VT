@@ -25,7 +25,7 @@ function requireAdminOnly(req, res, next) {
 }
 
 function signUser(user) {
-  return jwt.sign({ id: String(user._id), name: user.name, email: user.email, role: user.role }, secret, { expiresIn: '7d' });
+  return jwt.sign({ id: String(user._id), name: user.name, email: user.email, role: user.role }, secret, { expiresIn: '24h' });
 }
 
 module.exports = { authenticate, requireAdmin, requireAdminOnly, signUser };
