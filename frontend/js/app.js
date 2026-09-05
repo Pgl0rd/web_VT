@@ -277,12 +277,13 @@ async function openCatalog(id, activeButton) {
   const leftCanvas = document.getElementById('catalogCanvasLeft');
   const rightCanvas = document.getElementById('catalogCanvasRight');
   let pageNumber = 1;
+  let zoom = 1;
   const renderPage = async (direction = '') => {
     const pageNumbers = pageNumber === 1 ? [1] : (pageNumber < pdf.numPages ? [pageNumber, pageNumber + 1] : [pageNumber]);
     const pages = await Promise.all(pageNumbers.map(number => pdf.getPage(number)));
     const baseViewport = pages[0].getViewport({ scale: 1 });
     const spreadWidth = pageNumbers.length === 1 ? 760 : 1120;
-    const scale = Math.min(1.35, spreadWidth / (baseViewport.width * pageNumbers.length));
+    const scale = Math.min(1.35, spreadWidth / (baseViewport.width * pageNumbers.length)) * zoom;
     const renderCanvas = async (page, canvas) => {
       const viewport = page.getViewport({ scale });
       canvas.width = viewport.width;
@@ -299,10 +300,22 @@ async function openCatalog(id, activeButton) {
     document.getElementById('catalogPageNumber').textContent = pageNumbers.length === 1 ? `1 / ${pdf.numPages}` : `${pageNumbers[0]}-${pageNumbers[1]} / ${pdf.numPages}`;
     document.getElementById('catalogPrev').disabled = pageNumber === 1;
     document.getElementById('catalogNext').disabled = pageNumber === 1 ? pdf.numPages < 2 : pageNumber + 1 >= pdf.numPages;
+    document.getElementById('catalogZoomValue').textContent = `${Math.round(zoom * 100)}%`;
   };
   document.getElementById('catalogPrev').onclick = () => { if (pageNumber === 2) { pageNumber = 1; renderPage('flip-back'); } else if (pageNumber > 2) { pageNumber -= 2; renderPage('flip-back'); } };
   document.getElementById('catalogNext').onclick = () => { if (pageNumber === 1) { pageNumber = 2; renderPage('flip-forward'); } else if (pageNumber + 1 < pdf.numPages) { pageNumber += 2; renderPage('flip-forward'); } };
+  document.getElementById('catalogZoomOut').onclick = () => { zoom = Math.max(.7, zoom - .1); renderPage(); };
+  document.getElementById('catalogZoomIn').onclick = () => { zoom = Math.min(1.8, zoom + .1); renderPage(); };
   document.querySelectorAll('[data-close-catalog]').forEach(button => button.onclick = () => document.getElementById('flipbookShell').classList.add('hidden'));
+  document.onkeydown = event => {
+    const modal = document.getElementById('flipbookShell');
+    if (modal.classList.contains('hidden')) return;
+    if (event.key === 'ArrowRight') { event.preventDefault(); document.getElementById('catalogNext').click(); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); document.getElementById('catalogPrev').click(); }
+    if (event.key === 'Escape') modal.classList.add('hidden');
+    if (event.key === '+' || event.key === '=') { event.preventDefault(); document.getElementById('catalogZoomIn').click(); }
+    if (event.key === '-') { event.preventDefault(); document.getElementById('catalogZoomOut').click(); }
+  };
   shell.classList.remove('hidden');
   await renderPage();
 }
@@ -490,7 +503,7 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
   if (resultText) resultText.textContent = `${filtered.length} sản phẩm`;
 
   grid.innerHTML = filtered.map(product => `
-    <article class="product-card">
+    <article class="product-card" data-product-link="${product.id}" tabindex="0" role="link" aria-label="Xem ${product.name}">
       <div class="product-media">
         <span class="badge">${product.badge || 'Mới'}</span>
         <button class="wishlist" type="button">Yêu thích</button>
@@ -515,11 +528,22 @@ function renderProductGrid(containerId = "productGrid", options = {}) {
   `).join("");
 
   document.querySelectorAll("[data-add-cart]").forEach(btn => {
-    btn.addEventListener("click", () => addToCart(btn.dataset.addCart));
+    btn.addEventListener("click", event => { event.stopPropagation(); addToCart(btn.dataset.addCart); });
   });
 
+  document.querySelectorAll("[data-product-link]").forEach(card => {
+    const openProduct = () => { window.location.href = `${pageUrl('chi-tiet-san-pham.html')}?id=${card.dataset.productLink}`; };
+    card.addEventListener("click", event => {
+      if (event.target.closest('button, a, input, select')) return;
+      openProduct();
+    });
+    card.addEventListener("keydown", event => {
+      if ((event.key === 'Enter' || event.key === ' ') && event.target === card) { event.preventDefault(); openProduct(); }
+    });
+  });
   document.querySelectorAll("[data-view-product]").forEach(btn => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", event => {
+      event.stopPropagation();
       window.location.href = `${pageUrl('chi-tiet-san-pham.html')}?id=${btn.dataset.viewProduct}`;
     });
   });
@@ -1267,7 +1291,7 @@ async function renderProductDetail() {
     </section>
     <section class="related-products">
       <div class="related-heading"><div><span class="eyebrow">Có thể bạn sẽ thích</span><h2>Sản phẩm liên quan</h2></div><a href="san-pham.html">Xem tất cả</a></div>
-      <div class="product-grid related-grid">${relatedProducts.map(item => `<article class="product-card"><div class="product-media"><img src="${item.image}" alt="${item.name}"></div><div class="product-body"><div class="product-meta"><span>${item.category}</span><span>Đánh giá ${item.rating || 5}</span></div><h3 class="product-name">${item.name}</h3><div class="price-row"><span class="price">${formatMoney(item.price)}</span><span class="old-price">${item.oldPrice ? formatMoney(item.oldPrice) : ''}</span></div><div class="product-actions"><button class="btn btn-primary" type="button" data-related-add="${item.id}">Thêm vào giỏ</button><button class="btn-small" type="button" data-related-view="${item.id}">Xem</button></div></div></article>`).join('')}</div>
+      <div class="product-grid related-grid">${relatedProducts.map(item => `<article class="product-card" data-product-link="${item.id}" tabindex="0" role="link"><div class="product-media"><img src="${item.image}" alt="${item.name}"></div><div class="product-body"><div class="product-meta"><span>${item.category}</span><span>Đánh giá ${item.rating || 5}</span></div><h3 class="product-name">${item.name}</h3><div class="price-row"><span class="price">${formatMoney(item.price)}</span><span class="old-price">${item.oldPrice ? formatMoney(item.oldPrice) : ''}</span></div><div class="product-actions"><button class="btn btn-primary" type="button" data-related-add="${item.id}">Thêm vào giỏ</button><button class="btn-small" type="button" data-related-view="${item.id}">Xem</button></div></div></article>`).join('')}</div>
     </section>
   `;
 
@@ -1320,7 +1344,12 @@ async function renderProductDetail() {
       document.getElementById('selectedSpec').textContent = (selected.values || [selected.width, selected.thickness, selected.material].filter(Boolean)).join(' / ');
   };
   document.querySelectorAll('[data-detail-attribute]').forEach(select => select.addEventListener('change', updateSelectedVariant));
-  document.querySelectorAll('[data-related-add]').forEach(btn => btn.addEventListener('click', () => addToCart(btn.dataset.relatedAdd)));
+  document.querySelectorAll('[data-related-add]').forEach(btn => btn.addEventListener('click', event => { event.stopPropagation(); addToCart(btn.dataset.relatedAdd); }));
+  document.querySelectorAll('[data-product-link]').forEach(card => {
+    const openProduct = () => { window.location.href = `${pageUrl('chi-tiet-san-pham.html')}?id=${card.dataset.productLink}`; };
+    card.addEventListener('click', event => { if (!event.target.closest('button, a, input, select')) openProduct(); });
+    card.addEventListener('keydown', event => { if ((event.key === 'Enter' || event.key === ' ') && event.target === card) { event.preventDefault(); openProduct(); } });
+  });
   document.querySelectorAll('[data-related-view]').forEach(btn => btn.addEventListener('click', () => {
     window.location.href = `${pageUrl('chi-tiet-san-pham.html')}?id=${btn.dataset.relatedView}`;
   }));
