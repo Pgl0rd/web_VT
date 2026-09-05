@@ -6,13 +6,14 @@ const productRoutes = require('./routes/products');
 const categoryRoutes = require('./routes/categories');
 const userRoutes = require('./routes/users');
 const orderRoutes = require('./routes/orders');
+const catalogRoutes = require('./routes/catalogs');
 const db = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
 const app = express();
-app.use(express.json({ limit: '30mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 app.use(async (req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
@@ -31,6 +32,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/catalogs', catalogRoutes);
 
 app.get('/pages/index.html', (req, res) => res.redirect('/index.html'));
 app.get('/api/health', (req, res) => res.json({ ok: true, database: db.connected() ? 'connected' : 'fallback', mongoConfigured: Boolean(process.env.MONGO_URI) }));

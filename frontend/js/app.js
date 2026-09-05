@@ -211,6 +211,102 @@ async function initCategories() {
   }
 }
 
+const catalogLanguages = { vi: 'Tiếng Việt', en: 'English', zh: '中文' };
+
+async function loadCatalogs() {
+  const response = await fetch('/api/catalogs');
+  if (!response.ok) throw new Error('Không thể tải catalog');
+  return response.json();
+}
+
+function renderAdminCatalogs(catalogs) {
+  const container = document.getElementById('adminCatalogs');
+  if (!container) return;
+  container.innerHTML = Object.entries(catalogLanguages).map(([language, label]) => {
+    const catalog = catalogs.find(item => item.language === language);
+    return `<form class="catalog-admin-card" data-catalog-language="${language}"><div><strong>${label}</strong><small>${catalog ? catalog.fileName : 'Chưa có file'}</small></div><input name="title" value="${catalog?.title || `Catalog ${label}`}" required><input name="file" type="file" accept="application/pdf" required><button class="btn btn-primary" type="submit">${catalog ? 'Thay catalog' : 'Tải catalog'}</button>${catalog ? `<button class="btn-small" type="button" data-delete-catalog="${catalog._id}">Xóa</button>` : ''}</form>`;
+  }).join('');
+  container.querySelectorAll('[data-catalog-language]').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const file = form.file.files[0];
+    if (!file || file.type !== 'application/pdf') return showAdminToast('Vui lòng chọn file PDF.', 'error');
+    if (file.size > 40 * 1024 * 1024) return showAdminToast('PDF không được vượt quá 40MB.', 'error');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      const response = await fetch(`/api/catalogs/${form.dataset.catalogLanguage}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ title: form.title.value, language: form.dataset.catalogLanguage, fileName: file.name, data: reader.result }) });
+      const result = await response.json();
+      button.disabled = false;
+      if (!response.ok) return showAdminToast(result.error || 'Không thể lưu catalog.', 'error');
+      showAdminToast('Đã lưu catalog.');
+      renderAdminCatalogs(await loadCatalogs());
+    };
+    reader.readAsDataURL(file);
+  }));
+  container.querySelectorAll('[data-delete-catalog]').forEach(button => button.addEventListener('click', async () => {
+    if (!confirm('Xóa catalog này?')) return;
+    const response = await fetch(`/api/catalogs/${button.dataset.deleteCatalog}`, { method: 'DELETE', headers: authHeaders() });
+    if (!response.ok) return showAdminToast('Không thể xóa catalog.', 'error');
+    renderAdminCatalogs(await loadCatalogs());
+  }));
+}
+
+async function initCatalogPage() {
+  const tabs = document.getElementById('catalogTabs');
+  if (!tabs) return;
+  const catalogs = await loadCatalogs();
+  tabs.innerHTML = catalogs.map(catalog => `<button class="catalog-tab" type="button" data-catalog-id="${catalog._id}">${catalogLanguages[catalog.language] || catalog.language}<small>${catalog.title}</small></button>`).join('');
+  const empty = document.getElementById('catalogEmpty');
+  if (!catalogs.length) return;
+  empty.classList.add('hidden');
+  tabs.querySelectorAll('[data-catalog-id]').forEach(button => button.addEventListener('click', () => openCatalog(button.dataset.catalogId, button)));
+  tabs.querySelector('[data-catalog-id]')?.click();
+}
+
+async function openCatalog(id, activeButton) {
+  if (!window.pdfjsLib) return alert('Không thể tải trình đọc PDF.');
+  document.querySelectorAll('.catalog-tab').forEach(button => button.classList.toggle('active', button === activeButton));
+  const response = await fetch(`/api/catalogs/${id}`);
+  if (!response.ok) return alert('Không thể mở catalog.');
+  const catalog = await response.json();
+  const binary = atob(catalog.data.split(',')[1]);
+  const pdfBytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+  const pdf = await window.pdfjsLib.getDocument({ data: pdfBytes }).promise;
+  const shell = document.getElementById('flipbookShell');
+  const leftCanvas = document.getElementById('catalogCanvasLeft');
+  const rightCanvas = document.getElementById('catalogCanvasRight');
+  let pageNumber = 1;
+  const renderPage = async (direction = '') => {
+    const pageNumbers = pageNumber === 1 ? [1] : (pageNumber < pdf.numPages ? [pageNumber, pageNumber + 1] : [pageNumber]);
+    const pages = await Promise.all(pageNumbers.map(number => pdf.getPage(number)));
+    const baseViewport = pages[0].getViewport({ scale: 1 });
+    const spreadWidth = pageNumbers.length === 1 ? 760 : 1120;
+    const scale = Math.min(1.35, spreadWidth / (baseViewport.width * pageNumbers.length));
+    const renderCanvas = async (page, canvas) => {
+      const viewport = page.getViewport({ scale });
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      canvas.classList.remove('is-hidden');
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    };
+    await renderCanvas(pages[0], leftCanvas);
+    if (pages[1]) await renderCanvas(pages[1], rightCanvas);
+    else { rightCanvas.width = 1; rightCanvas.height = 1; rightCanvas.classList.add('is-hidden'); }
+    const flipbook = document.getElementById('flipbook');
+    flipbook.classList.remove('flip-forward', 'flip-back');
+    if (direction) requestAnimationFrame(() => flipbook.classList.add(direction));
+    document.getElementById('catalogPageNumber').textContent = pageNumbers.length === 1 ? `1 / ${pdf.numPages}` : `${pageNumbers[0]}-${pageNumbers[1]} / ${pdf.numPages}`;
+    document.getElementById('catalogPrev').disabled = pageNumber === 1;
+    document.getElementById('catalogNext').disabled = pageNumber === 1 ? pdf.numPages < 2 : pageNumber + 1 >= pdf.numPages;
+  };
+  document.getElementById('catalogPrev').onclick = () => { if (pageNumber === 2) { pageNumber = 1; renderPage('flip-back'); } else if (pageNumber > 2) { pageNumber -= 2; renderPage('flip-back'); } };
+  document.getElementById('catalogNext').onclick = () => { if (pageNumber === 1) { pageNumber = 2; renderPage('flip-forward'); } else if (pageNumber + 1 < pdf.numPages) { pageNumber += 2; renderPage('flip-forward'); } };
+  document.querySelectorAll('[data-close-catalog]').forEach(button => button.onclick = () => document.getElementById('flipbookShell').classList.add('hidden'));
+  shell.classList.remove('hidden');
+  await renderPage();
+}
+
 function categoryLink(categoryName) {
   return `${pageUrl('san-pham.html')}?category=${encodeURIComponent(categoryName)}`;
 }
@@ -342,11 +438,12 @@ function updateCartBadge() {
 }
 
 function addToCart(productId, quantity = 1) {
-  const existing = cart.find(item => item.id === productId);
+  const normalizedId = String(productId);
+  const existing = cart.find(item => String(item.id) === normalizedId);
   if (existing) {
     existing.qty += quantity;
   } else {
-    cart.push({ id: productId, qty: quantity });
+    cart.push({ id: normalizedId, qty: quantity });
   }
   localStorage.setItem(PRODUCT_STORAGE_KEY, JSON.stringify(cart));
   updateCartBadge();
@@ -356,11 +453,12 @@ function addToCart(productId, quantity = 1) {
 }
 
 function updateQty(productId, delta) {
-  const item = cart.find(item => item.id === productId);
+  const normalizedId = String(productId);
+  const item = cart.find(item => String(item.id) === normalizedId);
   if (!item) return;
   item.qty += delta;
   if (item.qty <= 0) {
-    cart = cart.filter(item => item.id !== productId);
+    cart = cart.filter(item => String(item.id) !== normalizedId);
   }
   localStorage.setItem(PRODUCT_STORAGE_KEY, JSON.stringify(cart));
   updateCartBadge();
@@ -441,11 +539,24 @@ function renderCartPage() {
     return;
   }
 
-  const productMap = Object.fromEntries(products.map(product => [product.id, product]));
+  const productMap = new Map(products.map(product => [String(product.id), product]));
   let subtotal = 0;
 
-  cartItems.innerHTML = cart.map(item => {
-    const product = productMap[item.id];
+  const validCart = cart.filter(item => productMap.has(String(item.id)) && Number(item.qty) > 0);
+  const missingCount = cart.length - validCart.length;
+  if (missingCount) {
+    cart = validCart;
+    localStorage.setItem(PRODUCT_STORAGE_KEY, JSON.stringify(cart));
+  }
+  if (!validCart.length) {
+    cartItems.innerHTML = `<div style="padding: 30px 12px; text-align: center; color: var(--muted);">Giỏ hàng của bạn đang trống hoặc sản phẩm đã không còn tồn tại.</div>`;
+    updateOrderSummary(0);
+    updateCartBadge();
+    return;
+  }
+
+  cartItems.innerHTML = validCart.map(item => {
+    const product = productMap.get(String(item.id));
     const lineTotal = product.price * item.qty;
     subtotal += lineTotal;
 
@@ -1366,8 +1477,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderAuthState();
   bindAccountForms();
   bindCategoryForm();
-  await initCategories();
-  await initProductsStorage();
+  const isCatalogPage = Boolean(document.getElementById('catalogTabs'));
+  if (!isCatalogPage) {
+    await initCategories();
+    await initProductsStorage();
+  }
+  if (document.getElementById('adminCatalogs')) {
+    renderAdminCatalogs(await loadCatalogs());
+  }
+  await initCatalogPage();
   renderAdminCategories();
   updateCartBadge();
   bindSearchAndFilters();
